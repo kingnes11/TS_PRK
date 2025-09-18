@@ -530,8 +530,8 @@ tabDetailBtn.addEventListener('click', ()=> activateTab('detail'));
 /** ===== 상세 로딩 ===== */
 function buildDetailUrl(rec){
   // 주차장형태별 파일 매핑
-  const map = { '노상':'offpaking.html', '노외':'onpaking.html', '부설':'buildpaking.html' };
-  const file = map[rec.type] || 'offpaking.html';
+  const map = { '노상':'offparking.html', '노외':'onparking.html', '부설':'buildparking.html' };
+  const file = map[rec.type] || 'offparking.html';
 
   const sp = new URLSearchParams({
     id: rec.manageNo,
