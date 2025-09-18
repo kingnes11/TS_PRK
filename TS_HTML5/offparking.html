@@ -43,22 +43,28 @@
   .mono{font-variant-numeric: tabular-nums}
   .suffix{white-space:nowrap; color:var(--muted); font-size:.95rem}
   .row-1c{grid-template-columns:1fr}
-  .chips{display:flex; gap:8px; flex-wrap:wrap}
-  .chips .chip{display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:999px; padding:6px 10px; background:transparent}
   .help{font-size:.85rem; color:var(--muted)}
   .ok{color:var(--ok)}
   .warn{color:var(--warn)}
   .ctl.warn{border-color:var(--warn)}
   [hidden]{display:none !important}
 
+  /* 표준 라디오/체크 그룹 */
+  .radio-group, .check-group{display:flex; flex-wrap:wrap; gap:12px}
+  .radio-group label, .check-group label{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:6px 10px; border:1px solid var(--border); border-radius:999px;
+    background:transparent; line-height:1.2;
+  }
+  .radio-group input[type="radio"], .check-group input[type="checkbox"]{
+    width:18px; height:18px; accent-color:var(--primary);
+  }
+
   /* 주소찾기 레이어 */
   #postcodeLayer{display:none; position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:9999}
   #postcodeWrap{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(100vw - 24px,520px); height:70vh; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,.2)}
   #postcodeClose{position:absolute; right:10px; top:10px; z-index:1}
   #postcodeContainer{width:100%; height:100%}
-  /* 토글 */
-  .toggle{display:inline-flex; align-items:center; gap:8px; user-select:none}
-  .toggle input{width:40px; height:22px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js"></script>
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -138,29 +144,26 @@
             <input id="f_totalStalls" type="number" min="0" inputmode="numeric" placeholder="예) 120" />
             <span class="suffix">면</span>
           </div>
-          <div class="chips" style="margin-top:6px">
-            <label class="chip"><span>장애인</span><input id="f_st_dis"   type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
-            <label class="chip"><span>경차</span>  <input id="f_st_small" type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
-            <label class="chip"><span>친환경</span><input id="f_st_green" type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
-            <label class="chip"><span>임산부</span><input id="f_st_preg"  type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
+          <div class="radio-group" style="margin-top:6px">
+            <label><input id="autoSum" type="checkbox" /> <span>세부합을 자동으로 총면수에 반영</span></label>
           </div>
-          <div style="display:flex; align-items:center; gap:12px; margin-top:6px">
-            <label class="toggle">
-              <input id="autoSum" type="checkbox" checked />
-              <span>자동 합계 반영(세부합 = 총면수)</span>
-            </label>
-            <div id="stallsMsg" class="help"></div>
+          <div id="stallsMsg" class="help" style="margin-top:4px"></div>
+          <div class="check-group" style="margin-top:8px">
+            <label><span>장애인</span><input id="f_st_dis"   type="number" min="0" inputmode="numeric" style="width:90px; margin-left:6px" /><span class="suffix">면</span></label>
+            <label><span>경차</span>  <input id="f_st_small" type="number" min="0" inputmode="numeric" style="width:90px; margin-left:6px" /><span class="suffix">면</span></label>
+            <label><span>친환경</span><input id="f_st_green" type="number" min="0" inputmode="numeric" style="width:90px; margin-left:6px" /><span class="suffix">면</span></label>
+            <label><span>임산부</span><input id="f_st_preg"  type="number" min="0" inputmode="numeric" style="width:90px; margin-left:6px" /><span class="suffix">면</span></label>
           </div>
         </div>
 
-        <!-- 운영주체 -->
-        <div>
+        <!-- 운영주체 (라디오 표준형) -->
+        <div style="grid-column:1/-1">
           <label>운영주체</label>
-          <div class="chips">
-            <label class="chip"><input type="radio" name="own" value="시운영" checked /> 시운영</label>
-            <label class="chip"><input type="radio" name="own" value="구(군)운영" /> 구(군)운영</label>
-            <label class="chip"><input type="radio" name="own" value="공단위탁" /> 공단위탁</label>
-            <label class="chip"><input type="radio" name="own" value="민간위탁" id="own_private" /> 민간위탁</label>
+          <div class="radio-group" id="own_group">
+            <label><input type="radio" name="own" value="시운영" checked /> <span>시운영</span></label>
+            <label><input type="radio" name="own" value="구(군)운영" /> <span>구(군)운영</span></label>
+            <label><input type="radio" name="own" value="공단위탁" /> <span>공단위탁</span></label>
+            <label><input type="radio" name="own" value="민간위탁" id="own_private" /> <span>민간위탁</span></label>
           </div>
         </div>
         <div id="own_company_wrap" hidden>
@@ -192,22 +195,22 @@
           </div>
         </div>
 
-        <!-- 운영방식 (단일 선택) -->
+        <!-- 운영방식 (라디오 표준형) -->
         <div style="grid-column:1/-1">
           <label>주차장 운영방식</label>
-          <div class="chips">
-            <label class="chip"><input type="radio" name="opType" value="일반노상주차장" checked /> 일반노상주차장</label>
-            <label class="chip"><input type="radio" name="opType" value="거주자우선주차장" /> 거주자우선주차장</label>
-            <label class="chip"><input type="radio" name="opType" value="일반노상주차장+거주자우선주차장" /> 일반노상주차장+거주자우선주차장</label>
+          <div class="radio-group" id="op_group">
+            <label><input type="radio" name="opType" value="일반노상주차장" checked /> <span>일반노상주차장</span></label>
+            <label><input type="radio" name="opType" value="거주자우선주차장" /> <span>거주자우선주차장</span></label>
+            <label><input type="radio" name="opType" value="일반노상주차장+거주자우선주차장" /> <span>일반노상+거주자우선</span></label>
           </div>
         </div>
 
-        <!-- 시간대 (복수 선택) -->
+        <!-- 시간대 (체크 표준형) -->
         <div style="grid-column:1/-1">
           <label>운영 시간대</label>
-          <div class="chips">
-            <label class="chip"><input type="checkbox" id="chk_day" /> 주간</label>
-            <label class="chip"><input type="checkbox" id="chk_night" /> 야간</label>
+          <div class="check-group">
+            <label><input type="checkbox" id="chk_day" /> <span>주간</span></label>
+            <label><input type="checkbox" id="chk_night" /> <span>야간</span></label>
           </div>
         </div>
 
@@ -419,12 +422,11 @@ async function readJpegGpsSafe(file){
   function rng(s,l){ return s>=0 && (s+(l||0))<=v.byteLength; }
 }
 
-/* ===== 운영/요금 토글 로직 ===== */
+/* ===== 라디오/체크 토글 로직 ===== */
 const ownRadios=[...document.querySelectorAll('input[name="own"]')];
 const ownWrap=$('#own_company_wrap'), ownCompany=$('#f_own_company');
-
 ownRadios.forEach(r=>r.addEventListener('change', ()=>{
-  const isPrivate = r.value==='민간위탁' && r.checked;
+  const isPrivate = (r.value==='민간위탁' && r.checked);
   ownWrap.hidden = !isPrivate;
   if(!isPrivate) ownCompany.value='';
 }));
@@ -464,30 +466,27 @@ function setWarn(on, text){
   msgEl.classList.toggle('warn', !!on);
   msgEl.classList.toggle('ok', !on && text);
 }
-function syncAutoReadonly(){
-  const on = autoSumEl.checked;
-  totalInput.readOnly = on;
-  totalInput.tabIndex = on ? -1 : 0;
-}
 function recompute(){
   const sum = detailSum();
   if(autoSumEl.checked){
-    totalInput.value = sum;
+    totalInput.value = sum; // 자동 반영하지만 '입력 가능'(readOnly 아님)
     setWarn(false, sum ? `세부합 ${sum.toLocaleString()}면 자동반영` : '');
   }else{
     const total = num(totalInput.value);
     if(total !== sum){
       const diff = total - sum;
       setWarn(true, `세부합 ${sum.toLocaleString()}면 ≠ 총 ${total.toLocaleString()}면 (차이 ${diff>0?'+':''}${diff})`);
-    }else{
+    }else if(total || sum){
       setWarn(false, `세부합과 총면수가 일치합니다 (${sum.toLocaleString()}면)`);
+    }else{
+      setWarn(false, '');
     }
   }
 }
 [disInput, smallInput, greenInput, pregInput].forEach(el=> el.addEventListener('input', recompute));
-totalInput.addEventListener('input', ()=>{ if(!autoSumEl.checked) recompute(); });
-autoSumEl.addEventListener('change', ()=>{ syncAutoReadonly(); recompute(); });
-syncAutoReadonly(); recompute();
+totalInput.addEventListener('input', recompute);
+autoSumEl.addEventListener('change', recompute);
+recompute();
 
 /* ===== 헤더 주소 ===== */
 function updateHeaderAddr(){
@@ -506,10 +505,8 @@ function doSave(){
       return;
     }
   }
-
   const own = (ownRadios.find(r=>r.checked)||{}).value || '';
   const opType = (opTypeRadios.find(r=>r.checked)||{}).value || '';
-
   const payload={
     id:f_id.value, name:f_name.value, status:f_status.value, type:'노상',
     sido:f_sido.value, sigungu:f_sigungu.value, emd:f_emd.value,
