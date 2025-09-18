@@ -5,9 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>노상주차장 상세</title>
 <style>
-  :root{ --bg:#f6f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280; --primary:#2563eb; --primary-2:#1d4ed8; --border:#e5e7eb; }
+  :root{
+    --bg:#f6f7fb; --card:#fff; --text:#1f2937; --muted:#6b7280;
+    --primary:#2563eb; --primary-2:#1d4ed8; --border:#e5e7eb;
+    --warn:#dc2626; --ok:#16a34a;
+  }
   @media (prefers-color-scheme: dark){
-    :root{ --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --primary:#3b82f6; --primary-2:#2563eb; --border:#20304f; }
+    :root{
+      --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
+      --primary:#3b82f6; --primary-2:#2563eb; --border:#20304f;
+      --warn:#f87171; --ok:#34d399;
+    }
   }
   *{box-sizing:border-box}
   body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif; background:var(--bg); color:var(--text); padding:12px}
@@ -24,7 +32,7 @@
   @media(min-width:700px){ .grid{grid-template-columns: 1fr 1fr} }
   label{display:block; font-size:.85rem; color:var(--muted); margin-bottom:4px}
   .ctl{display:flex; gap:8px; border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:transparent; align-items:center; flex-wrap:wrap}
-  input,textarea{border:0; outline:0; width:100%; background:transparent; color:var(--text)}
+  input,textarea,select{border:0; outline:0; width:100%; background:transparent; color:var(--text); font-size:1rem}
   input[readonly]{color:var(--muted)}
   textarea{min-height:80px; resize:vertical}
   .actions{display:flex; gap:8px; flex-wrap:wrap}
@@ -33,11 +41,24 @@
   .btn.light{background:#eef2ff; color:#1e40af; border:1px solid var(--border)}
   .thumb{width:100%; max-height:260px; object-fit:contain; border:1px solid var(--border); border-radius:10px; background:#fff}
   .mono{font-variant-numeric: tabular-nums}
+  .suffix{white-space:nowrap; color:var(--muted); font-size:.95rem}
+  .row-1c{grid-template-columns:1fr}
+  .chips{display:flex; gap:8px; flex-wrap:wrap}
+  .chips .chip{display:flex; align-items:center; gap:6px; border:1px solid var(--border); border-radius:999px; padding:6px 10px; background:transparent}
+  .help{font-size:.85rem; color:var(--muted)}
+  .ok{color:var(--ok)}
+  .warn{color:var(--warn)}
+  .ctl.warn{border-color:var(--warn)}
+  [hidden]{display:none !important}
+
   /* 주소찾기 레이어 */
   #postcodeLayer{display:none; position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:9999}
   #postcodeWrap{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(100vw - 24px,520px); height:70vh; background:#fff; border:1px solid var(--border); border-radius:12px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,.2)}
   #postcodeClose{position:absolute; right:10px; top:10px; z-index:1}
   #postcodeContainer{width:100%; height:100%}
+  /* 토글 */
+  .toggle{display:inline-flex; align-items:center; gap:8px; user-select:none}
+  .toggle input{width:40px; height:22px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/full.umd.js"></script>
 <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
@@ -51,10 +72,12 @@
       <span class="muted" id="v_addr"></span>
       <span class="actions" style="margin-left:auto">
         <button class="btn" onclick="window.print()">인쇄</button>
+        <button class="btn" id="btnSaveTop">저장</button>
       </span>
     </header>
 
     <section class="row">
+      <!-- 기본정보 -->
       <div class="card">
         <h2>기본정보</h2>
         <div class="grid">
@@ -66,21 +89,22 @@
           <div><label for="f_sigungu">시군구</label><div class="ctl"><input id="f_sigungu" /></div></div>
           <div><label for="f_emd">읍면동</label><div class="ctl"><input id="f_emd" /></div></div>
 
+          <!-- 주소: 지번/도로명 + 아래 주소찾기 버튼 -->
           <div style="grid-column:1/-1">
             <label for="f_addr_jibun">지번 주소</label>
-            <div class="ctl">
-              <input id="f_addr_jibun" type="text" placeholder="예) 서울 마포구 연남동 123-45" readonly />
-              <button type="button" class="btn light" id="btnFindAddr">주소찾기</button>
-            </div>
+            <div class="ctl"><input id="f_addr_jibun" type="text" placeholder="예) 서울 마포구 연남동 123-45" readonly /></div>
           </div>
-          <!-- 추가: 도로명 주소(읽기전용, 주소찾기에서 함께 채움) -->
           <div style="grid-column:1/-1">
             <label for="f_addr_road">도로명 주소</label>
             <div class="ctl"><input id="f_addr_road" type="text" placeholder="예) 서울 마포구 연남로 123" readonly /></div>
           </div>
+          <div style="grid-column:1/-1; display:flex; gap:8px">
+            <button type="button" class="btn light" id="btnFindAddr">주소찾기</button>
+          </div>
         </div>
       </div>
 
+      <!-- 사진 & 좌표 -->
       <div class="card">
         <h2>현장 사진 & 좌표</h2>
         <div class="grid">
@@ -96,9 +120,132 @@
             </div>
           </div>
           <div style="grid-column:1/-1"><img id="preview" class="thumb" alt="사진 미리보기" /></div>
-          <div><label for="f_lat">위도</label><div class="ctl"><input id="f_lat" class="mono" /></div></div>
-          <div><label for="f_lng">경도</label><div class="ctl"><input id="f_lng" class="mono" /></div></div>
+          <div><label for="f_lat">위도</label><div class="ctl"><input id="f_lat" class="mono" inputmode="decimal" /></div></div>
+          <div><label for="f_lng">경도</label><div class="ctl"><input id="f_lng" class="mono" inputmode="decimal" /></div></div>
         </div>
+      </div>
+    </section>
+
+    <!-- 운영/요금/면수 -->
+    <section class="card">
+      <h2>운영 · 요금 · 주차면수</h2>
+      <div class="grid">
+
+        <!-- 총 주차면수 + 세부 -->
+        <div style="grid-column:1/-1">
+          <label for="f_totalStalls">총 주차면수</label>
+          <div id="ctl_total" class="ctl">
+            <input id="f_totalStalls" type="number" min="0" inputmode="numeric" placeholder="예) 120" />
+            <span class="suffix">면</span>
+          </div>
+          <div class="chips" style="margin-top:6px">
+            <label class="chip"><span>장애인</span><input id="f_st_dis"   type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
+            <label class="chip"><span>경차</span>  <input id="f_st_small" type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
+            <label class="chip"><span>친환경</span><input id="f_st_green" type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
+            <label class="chip"><span>임산부</span><input id="f_st_preg"  type="number" min="0" inputmode="numeric" style="width:90px" /><span class="suffix">면</span></label>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:6px">
+            <label class="toggle">
+              <input id="autoSum" type="checkbox" checked />
+              <span>자동 합계 반영(세부합 = 총면수)</span>
+            </label>
+            <div id="stallsMsg" class="help"></div>
+          </div>
+        </div>
+
+        <!-- 운영주체 -->
+        <div>
+          <label>운영주체</label>
+          <div class="chips">
+            <label class="chip"><input type="radio" name="own" value="시운영" checked /> 시운영</label>
+            <label class="chip"><input type="radio" name="own" value="구(군)운영" /> 구(군)운영</label>
+            <label class="chip"><input type="radio" name="own" value="공단위탁" /> 공단위탁</label>
+            <label class="chip"><input type="radio" name="own" value="민간위탁" id="own_private" /> 민간위탁</label>
+          </div>
+        </div>
+        <div id="own_company_wrap" hidden>
+          <label for="f_own_company">민간위탁 업체명</label>
+          <div class="ctl"><input id="f_own_company" placeholder="예) ㈜○○파킹" /></div>
+        </div>
+
+        <!-- 관리기관 -->
+        <div>
+          <label for="f_mgr_name">관리기관명</label>
+          <div class="ctl"><input id="f_mgr_name" placeholder="예) 마포구청 교통행정과" /></div>
+        </div>
+        <div>
+          <label for="f_mgr_tel">관리기관 전화번호</label>
+          <div class="ctl"><input id="f_mgr_tel" placeholder="예) 02-123-4567" inputmode="tel" /></div>
+        </div>
+
+        <!-- 부제 시행 여부 -->
+        <div>
+          <label for="f_oddEven">부제 시행 여부</label>
+          <div class="ctl">
+            <select id="f_oddEven">
+              <option value="미시행">미시행</option>
+              <option value="2부제">2부제</option>
+              <option value="5부제">5부제</option>
+              <option value="10부제">10부제</option>
+              <option value="승용차요일제">승용차요일제</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- 운영방식 (단일 선택) -->
+        <div style="grid-column:1/-1">
+          <label>주차장 운영방식</label>
+          <div class="chips">
+            <label class="chip"><input type="radio" name="opType" value="일반노상주차장" checked /> 일반노상주차장</label>
+            <label class="chip"><input type="radio" name="opType" value="거주자우선주차장" /> 거주자우선주차장</label>
+            <label class="chip"><input type="radio" name="opType" value="일반노상주차장+거주자우선주차장" /> 일반노상주차장+거주자우선주차장</label>
+          </div>
+        </div>
+
+        <!-- 시간대 (복수 선택) -->
+        <div style="grid-column:1/-1">
+          <label>운영 시간대</label>
+          <div class="chips">
+            <label class="chip"><input type="checkbox" id="chk_day" /> 주간</label>
+            <label class="chip"><input type="checkbox" id="chk_night" /> 야간</label>
+          </div>
+        </div>
+
+        <!-- 주간 세부 (급지 + 요금부과여부) -->
+        <div id="day_detail_wrap" class="grid row-1c" hidden style="grid-column:1/-1">
+          <div>
+            <label for="f_day_grade">주간 급지</label>
+            <div class="ctl">
+              <select id="f_day_grade">
+                <option value="">선택</option>
+                <option>1급지</option><option>2급지</option><option>3급지</option>
+                <option>4급지</option><option>5급지</option>
+                <option>미분류</option><option>기타</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="f_day_feeType">주간 요금 부과여부</label>
+            <div class="ctl">
+              <select id="f_day_feeType">
+                <option value="">선택</option>
+                <option>유료</option>
+                <option>무료</option>
+                <option>유료+무료</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 거주자우선 주차요금 -->
+        <div id="res_fee_wrap" class="grid row-1c" hidden style="grid-column:1/-1">
+          <h3 class="help" style="margin:.2rem 0">거주자우선주차장 요금(원)</h3>
+          <div><label for="f_res_all">전일</label><div class="ctl"><input id="f_res_all" type="number" min="0" inputmode="numeric" placeholder="예) 5000" /><span class="suffix">원</span></div></div>
+          <div><label for="f_res_day">주간</label><div class="ctl"><input id="f_res_day" type="number" min="0" inputmode="numeric" placeholder="예) 3000" /><span class="suffix">원</span></div></div>
+          <div><label for="f_res_full">상근</label><div class="ctl"><input id="f_res_full" type="number" min="0" inputmode="numeric" placeholder="예) 4000" /><span class="suffix">원</span></div></div>
+          <div><label for="f_res_night">야간</label><div class="ctl"><input id="f_res_night" type="number" min="0" inputmode="numeric" placeholder="예) 2000" /><span class="suffix">원</span></div></div>
+        </div>
+
       </div>
     </section>
 
@@ -123,7 +270,7 @@ const $=(s)=>document.querySelector(s);
 function params(){const sp=new URLSearchParams(location.search);return new Proxy({}, {get:(_,k)=> sp.get(k)||''});}
 const p=params();
 
-/* 필드 */
+/* ===== 기본 필드 ===== */
 const f_id=$('#f_id'), f_name=$('#f_name'), f_status=$('#f_status'), f_type=$('#f_type');
 const f_sido=$('#f_sido'), f_sigungu=$('#f_sigungu'), f_emd=$('#f_emd');
 const f_addrJ=$('#f_addr_jibun'), f_addrR=$('#f_addr_road');
@@ -131,18 +278,13 @@ const f_lat=$('#f_lat'), f_lng=$('#f_lng');
 const v_id=$('#v_id'), v_name=$('#v_name'), v_addr=$('#v_addr');
 
 /* 샘플/주입 */
-const sample={
-  id:'PRK-0002', name:'연남로 노상', status:'PENDING',
-  sido:'서울특별시', sigungu:'마포구', emd:'연남동',
-  addrJ:'서울 마포구 연남동 123-45', addrR:'서울 마포구 연남로 123'
-};
+const sample={ id:'PRK-0002', name:'연남로 노상', status:'PENDING', sido:'서울특별시', sigungu:'마포구', emd:'연남동', addrJ:'서울 마포구 연남동 123-45', addrR:'서울 마포구 연남로 123' };
 f_id.value=p.id||sample.id; f_name.value=p.name||sample.name; f_status.value=p.status||sample.status; f_type.value='노상';
 f_sido.value=p.sido||sample.sido; f_sigungu.value=p.sigungu||sample.sigungu; f_emd.value=p.emd||sample.emd;
 f_addrJ.value=p.jibun||p.addr||sample.addrJ; f_addrR.value=p.road||sample.addrR;
-v_id.textContent=f_id.value; v_name.textContent=f_name.value||'노상주차장 상세';
-updateHeaderAddr();
+v_id.textContent=f_id.value; v_name.textContent=f_name.value||'노상주차장 상세'; updateHeaderAddr();
 
-/* 주소찾기 */
+/* ===== 주소찾기 레이어 ===== */
 const layer=$('#postcodeLayer'), container=$('#postcodeContainer');
 $('#btnFindAddr').addEventListener('click', ()=>{
   layer.style.display='block'; container.innerHTML='';
@@ -159,52 +301,42 @@ $('#btnFindAddr').addEventListener('click', ()=>{
 $('#postcodeClose').addEventListener('click', ()=> layer.style.display='none');
 layer.addEventListener('click', (e)=>{ if(e.target===layer) layer.style.display='none'; });
 
-/* 사진 업로드: 사진첩/카메라 분리 */
+/* ===== 사진 업로드/좌표 ===== */
 const inLib=$('#f_photo_lib'), inCam=$('#f_photo_cam');
-const btnLib=$('#btnPickFromLibrary'), btnCam=$('#btnTakePhoto');
-const preview=$('#preview');
-btnLib.addEventListener('click', ()=> inLib.click());
-btnCam.addEventListener('click', ()=> inCam.click());
+$('#btnPickFromLibrary').addEventListener('click', ()=> inLib.click());
+$('#btnTakePhoto').addEventListener('click', ()=> inCam.click());
+$('#btnUseGeolocation').addEventListener('click', async ()=>{
+  const c=await geoFromDevice(); if(c){ f_lat.value=c.lat.toFixed(6); f_lng.value=c.lng.toFixed(6); }
+});
+$('#btnClearPhoto').addEventListener('click', ()=>{
+  inLib.value=''; inCam.value=''; $('#preview').removeAttribute('src'); f_lat.value=''; f_lng.value='';
+});
 inLib.addEventListener('change', (e)=> handleFiles(e.target.files, 'lib'));
 inCam.addEventListener('change', (e)=> handleFiles(e.target.files, 'cam'));
 
 async function handleFiles(list, mode){
   const file=list && list[0]; if(!file) return;
-  try{ preview.src=URL.createObjectURL(file); }catch(_){}
+  try{ $('#preview').src=URL.createObjectURL(file); }catch(_){}
   if(mode==='cam'){
-    const c=await geoFromDeviceSilent();
+    const c=await geoFromDeviceSilent(); // 촬영 시 무음으로 기기좌표 사용
     if(c){ f_lat.value=c.lat.toFixed(6); f_lng.value=c.lng.toFixed(6); }
-    return; // 무음
+    return;
   }
   try{
     let coords=null;
     if(window.exifr){
       try{
         const g=await exifr.gps(file);
-        if(g && typeof g.latitude==='number' && typeof g.longitude==='number')
-          coords={lat:g.latitude,lng:g.longitude};
+        if(g && typeof g.latitude==='number' && typeof g.longitude==='number') coords={lat:g.latitude,lng:g.longitude};
       }catch(_){}
     }
     if(!coords && (/jpe?g$/i.test(file.name) || file.type==='image/jpeg')){
       try{ coords=await readJpegGpsSafe(file); }catch(_){}
     }
-    if(coords){
-      f_lat.value=Number(coords.lat).toFixed(6); f_lng.value=Number(coords.lng).toFixed(6);
-    }else{
-      alert('이 사진에는 위치 정보가 없습니다. 다른 사진을 선택하거나, "기기 위치로 좌표"를 이용하세요.');
-    }
-  }catch(err){ console.error(err); alert('사진 처리 중 오류가 발생했습니다.'); }
+    if(coords){ f_lat.value=Number(coords.lat).toFixed(6); f_lng.value=Number(coords.lng).toFixed(6); }
+  }catch(err){ console.error(err); }
 }
 
-/* 기기 위치 버튼(수동) */
-$('#btnUseGeolocation').addEventListener('click', async ()=>{
-  const c=await geoFromDevice(); if(c){ f_lat.value=c.lat.toFixed(6); f_lng.value=c.lng.toFixed(6); }
-});
-$('#btnClearPhoto').addEventListener('click', ()=>{
-  inLib.value=''; inCam.value=''; preview.removeAttribute('src'); f_lat.value=''; f_lng.value='';
-});
-
-/* Silent(촬영용) */
 async function geoFromDeviceSilent(){
   if(!('geolocation' in navigator) || !isSecureContext) return null;
   try{
@@ -217,8 +349,6 @@ async function geoFromDeviceSilent(){
     }catch(__){ return null; }
   }
 }
-
-/* Verbose(수동 버튼 용) */
 async function geoFromDevice(){
   if(!('geolocation' in navigator)) { alert('이 브라우저는 위치 기능을 지원하지 않습니다.'); return null; }
   if(!isSecureContext) { alert('HTTPS 또는 http://localhost 에서만 위치 사용 가능'); return null; }
@@ -233,7 +363,7 @@ async function geoFromDevice(){
   }
 }
 
-/* JPEG EXIF 보조 파서 (헬퍼 포함) */
+/* JPEG EXIF 보조 파서 */
 function u16(v,o,le){ return v.getUint16(o, !!le); }
 function u32(v,o,le){ return v.getUint32(o, !!le); }
 async function readJpegGpsSafe(file){
@@ -289,19 +419,122 @@ async function readJpegGpsSafe(file){
   function rng(s,l){ return s>=0 && (s+(l||0))<=v.byteLength; }
 }
 
-/* 헤더 주소 업데이트 */
+/* ===== 운영/요금 토글 로직 ===== */
+const ownRadios=[...document.querySelectorAll('input[name="own"]')];
+const ownWrap=$('#own_company_wrap'), ownCompany=$('#f_own_company');
+
+ownRadios.forEach(r=>r.addEventListener('change', ()=>{
+  const isPrivate = r.value==='민간위탁' && r.checked;
+  ownWrap.hidden = !isPrivate;
+  if(!isPrivate) ownCompany.value='';
+}));
+
+const opTypeRadios=[...document.querySelectorAll('input[name="opType"]')];
+const resWrap=$('#res_fee_wrap');
+function syncResWrap(){
+  const v = opTypeRadios.find(r=>r.checked)?.value || '';
+  const hasResident = v.includes('거주자우선주차장');
+  resWrap.hidden = !hasResident;
+}
+opTypeRadios.forEach(r=>r.addEventListener('change', syncResWrap));
+syncResWrap();
+
+const chkDay=$('#chk_day'), dayDetail=$('#day_detail_wrap');
+function syncDay(){ dayDetail.hidden = !chkDay.checked; }
+chkDay.addEventListener('change', syncDay);
+syncDay();
+
+/* ===== 총면수 ↔ 세부면수 자동/검증 ===== */
+const totalInput = $('#f_totalStalls');
+const ctlTotal   = $('#ctl_total');
+const disInput   = $('#f_st_dis');
+const smallInput = $('#f_st_small');
+const greenInput = $('#f_st_green');
+const pregInput  = $('#f_st_preg');
+const autoSumEl  = $('#autoSum');
+const msgEl      = $('#stallsMsg');
+
+function num(v){ const n=parseInt((v||'').toString().replace(/[^0-9]/g,''),10); return Number.isFinite(n)&&n>=0?n:0; }
+function detailSum(){
+  return num(disInput.value)+num(smallInput.value)+num(greenInput.value)+num(pregInput.value);
+}
+function setWarn(on, text){
+  ctlTotal.classList.toggle('warn', !!on);
+  msgEl.textContent = text || '';
+  msgEl.classList.toggle('warn', !!on);
+  msgEl.classList.toggle('ok', !on && text);
+}
+function syncAutoReadonly(){
+  const on = autoSumEl.checked;
+  totalInput.readOnly = on;
+  totalInput.tabIndex = on ? -1 : 0;
+}
+function recompute(){
+  const sum = detailSum();
+  if(autoSumEl.checked){
+    totalInput.value = sum;
+    setWarn(false, sum ? `세부합 ${sum.toLocaleString()}면 자동반영` : '');
+  }else{
+    const total = num(totalInput.value);
+    if(total !== sum){
+      const diff = total - sum;
+      setWarn(true, `세부합 ${sum.toLocaleString()}면 ≠ 총 ${total.toLocaleString()}면 (차이 ${diff>0?'+':''}${diff})`);
+    }else{
+      setWarn(false, `세부합과 총면수가 일치합니다 (${sum.toLocaleString()}면)`);
+    }
+  }
+}
+[disInput, smallInput, greenInput, pregInput].forEach(el=> el.addEventListener('input', recompute));
+totalInput.addEventListener('input', ()=>{ if(!autoSumEl.checked) recompute(); });
+autoSumEl.addEventListener('change', ()=>{ syncAutoReadonly(); recompute(); });
+syncAutoReadonly(); recompute();
+
+/* ===== 헤더 주소 ===== */
 function updateHeaderAddr(){
   const j=f_addrJ.value?.trim(); const r=f_addrR.value?.trim();
   v_addr.textContent = (j||r) ? ' · '+[j,r].filter(Boolean).join(' / ') : '';
 }
 
-/* 저장(샘플) */
+/* ===== 저장 ===== */
 function doSave(){
+  // 자동합계 OFF + 불일치면 저장 중단
+  if(!autoSumEl.checked){
+    const sum = detailSum();
+    const total = num(totalInput.value);
+    if(total !== sum){
+      alert('총면수와 세부면수의 합이 일치하지 않습니다. 확인해주세요.');
+      return;
+    }
+  }
+
+  const own = (ownRadios.find(r=>r.checked)||{}).value || '';
+  const opType = (opTypeRadios.find(r=>r.checked)||{}).value || '';
+
   const payload={
     id:f_id.value, name:f_name.value, status:f_status.value, type:'노상',
     sido:f_sido.value, sigungu:f_sigungu.value, emd:f_emd.value,
-    addrJibun:f_addrJ.value, addrRoad:f_addrR.value,
-    lat:f_lat.value, lng:f_lng.value
+    addrJibun:f_addrJ.value, addrRoad:f_addrR.value, lat:f_lat.value, lng:f_lng.value,
+
+    totalStalls: num(totalInput.value),
+    stalls:{ disabled:num(disInput.value), compact:num(smallInput.value), eco:num(greenInput.value), pregnant:num(pregInput.value) },
+    autoTotalFromDetail: autoSumEl.checked,
+
+    ownerType: own,
+    ownerCompany: (own==='민간위탁') ? ($('#f_own_company').value) : '',
+    manager:{ name:$('#f_mgr_name').value, tel:$('#f_mgr_tel').value },
+
+    oddEven: $('#f_oddEven').value,
+
+    operationType: opType,
+    times:{ day:$('#chk_day').checked, night:$('#chk_night').checked },
+    dayDetail: $('#chk_day').checked ? { grade: $('#f_day_grade').value, feeType: $('#f_day_feeType').value } : null,
+
+    residentFees: (!resWrap.hidden) ? {
+      all:num($('#f_res_all').value),
+      day:num($('#f_res_day').value),
+      full:num($('#f_res_full').value),
+      night:num($('#f_res_night').value)
+    } : null
   };
   console.log('SAVE(offstreet):', payload);
   alert('샘플 저장 완료(콘솔 확인). 실제 API로 교체하세요.');
