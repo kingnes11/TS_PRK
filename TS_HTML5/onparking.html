@@ -44,7 +44,8 @@
       <span class="muted" id="v_addr"></span>
       <span class="actions" style="margin-left:auto">
         <button class="btn" onclick="window.print()">인쇄</button>
-        <button class="btn ghost" onclick="history.back()">뒤로</button>
+        <!-- 뒤로 버튼 제거 → 저장 버튼으로 교체 -->
+        <button class="btn" id="btnSaveTop">저장</button>
       </span>
     </header>
 
@@ -59,7 +60,16 @@
           <div><label for="f_sido">시도</label><div class="ctl"><input id="f_sido" /></div></div>
           <div><label for="f_sigungu">시군구</label><div class="ctl"><input id="f_sigungu" /></div></div>
           <div><label for="f_emd">읍면동</label><div class="ctl"><input id="f_emd" /></div></div>
-          <div style="grid-column:1/-1"><label for="f_addr">상세주소</label><div class="ctl"><input id="f_addr" placeholder="예) 분당로 23" /></div></div>
+
+          <!-- 주소: 지번 아래 도로명 추가 -->
+          <div style="grid-column:1/-1">
+            <label for="f_addr_jibun">지번 주소</label>
+            <div class="ctl"><input id="f_addr_jibun" placeholder="예) 성남시 분당구 정자동 123-45" /></div>
+          </div>
+          <div style="grid-column:1/-1">
+            <label for="f_addr_road">도로명 주소</label>
+            <div class="ctl"><input id="f_addr_road" placeholder="예) 분당로 23" /></div>
+          </div>
         </div>
       </div>
 
@@ -86,8 +96,8 @@
 
     <section class="card">
       <div class="actions">
+        <!-- 하단도 저장만 유지 -->
         <button class="btn" id="btnSave">저장</button>
-        <button class="btn ghost" onclick="history.back()">목록으로</button>
         <span class="muted">샘플 저장입니다. 실제 API로 교체하세요.</span>
       </div>
     </section>
@@ -99,13 +109,35 @@ function params(){const sp=new URLSearchParams(location.search);return new Proxy
 const p=params();
 const sample={ id:'PRK-0004', name:'분당구청 노외', status:'APPROVED', sido:'경기도', sigungu:'성남시 분당구', emd:'정자동', addr:'분당로 23' };
 
+/* 필드 */
 const f_id=$('#f_id'), f_name=$('#f_name'), f_status=$('#f_status'), f_type=$('#f_type');
-const f_sido=$('#f_sido'), f_sigungu=$('#f_sigungu'), f_emd=$('#f_emd'), f_addr=$('#f_addr');
+const f_sido=$('#f_sido'), f_sigungu=$('#f_sigungu'), f_emd=$('#f_emd');
+const f_addrJ=$('#f_addr_jibun'), f_addrR=$('#f_addr_road');
 const f_lat=$('#f_lat'), f_lng=$('#f_lng');
+const v_addr=$('#v_addr');
 
-$('#v_name').textContent=p.name||sample.name; $('#v_id').textContent=p.id||sample.id; $('#v_addr').textContent=(p.addr||sample.addr)?' · '+(p.addr||sample.addr):'';
-f_id.value=p.id||sample.id; f_name.value=p.name||sample.name; f_status.value=p.status||sample.status; f_type.value='노외';
-f_sido.value=p.sido||sample.sido; f_sigungu.value=p.sigungu||sample.sigungu; f_emd.value=p.emd||sample.emd; f_addr.value=p.addr||sample.addr;
+/* 헤더 주입 */
+$('#v_name').textContent=p.name||sample.name;
+$('#v_id').textContent=p.id||sample.id;
+
+/* 값 주입 */
+f_id.value=p.id||sample.id;
+f_name.value=p.name||sample.name;
+f_status.value=p.status||sample.status;
+f_type.value='노외';
+f_sido.value=p.sido||sample.sido;
+f_sigungu.value=p.sigungu||sample.sigungu;
+f_emd.value=p.emd||sample.emd;
+/* 주소: 지번/도로명 개별 보관. 기존 addr 파라미터는 도로명으로 간주 */
+f_addrJ.value=''; // 필요시 서버 데이터로 채움
+f_addrR.value=p.addr||sample.addr;
+
+function updateHeaderAddr(){
+  const j=f_addrJ.value?.trim(); const r=f_addrR.value?.trim();
+  v_addr.textContent = (j||r) ? ' · '+[j,r].filter(Boolean).join(' / ') : '';
+}
+updateHeaderAddr();
+[f_addrJ, f_addrR].forEach(el=> el.addEventListener('input', updateHeaderAddr));
 
 /* 사진 업로드: 사진첩/카메라 분리 */
 const inLib=$('#f_photo_lib'), inCam=$('#f_photo_cam');
@@ -120,25 +152,43 @@ async function handleFiles(list, mode){
   const file=list && list[0]; if(!file) return;
   try{ preview.src=URL.createObjectURL(file); }catch(_){}
   if(mode==='cam'){
+    // 촬영 시: 안내 없이 기기 좌표 사용 (실패해도 무음)
     const c=await geoFromDeviceSilent();
     if(c){ f_lat.value=c.lat.toFixed(6); f_lng.value=c.lng.toFixed(6); }
-    return; // 무음
+    return;
   }
+  // 사진첩: EXIF 우선, 실패 시 1회 안내
   try{
     let coords=null;
-    if(window.exifr){ try{ const g=await exifr.gps(file); if(g && typeof g.latitude==='number' && typeof g.longitude==='number') coords={lat:g.latitude,lng:g.longitude}; }catch(_){ } }
-    if(!coords && (/jpe?g$/i.test(file.name) || file.type==='image/jpeg')){ try{ coords=await readJpegGpsSafe(file); }catch(_){ } }
-    if(coords){ f_lat.value=Number(coords.lat).toFixed(6); f_lng.value=Number(coords.lng).toFixed(6); }
-    else alert('이 사진에는 위치 정보가 없습니다. 다른 사진을 선택하거나, "기기 위치로 좌표"를 이용하세요.');
+    if(window.exifr){
+      try{
+        const g=await exifr.gps(file);
+        if(g && typeof g.latitude==='number' && typeof g.longitude==='number')
+          coords={lat:g.latitude,lng:g.longitude};
+      }catch(_){}
+    }
+    if(!coords && (/jpe?g$/i.test(file.name) || file.type==='image/jpeg')){
+      try{ coords=await readJpegGpsSafe(file); }catch(_){}
+    }
+    if(coords){
+      f_lat.value=Number(coords.lat).toFixed(6);
+      f_lng.value=Number(coords.lng).toFixed(6);
+    }else{
+      alert('이 사진에는 위치 정보가 없습니다. 다른 사진을 선택하거나, "기기 위치로 좌표"를 이용하세요.');
+    }
   }catch(err){ console.error(err); alert('사진 처리 중 오류가 발생했습니다.'); }
 }
 
-/* 기기 위치 버튼(수동) – 원래 동작 유지 */
+/* 기기 위치 버튼(수동) – 기존 동작 유지 */
 $('#btnUseGeolocation').addEventListener('click', async ()=>{
-  const c=await geoFromDevice(); if(c){ f_lat.value=c.lat.toFixed(6); f_lng.value=c.lng.toFixed(6); }
+  const c=await geoFromDevice();
+  if(c){ f_lat.value=c.lat.toFixed(6); f_lng.value=c.lng.toFixed(6); }
 });
-$('#btnClearPhoto').addEventListener('click', ()=>{ inLib.value=''; inCam.value=''; preview.removeAttribute('src'); f_lat.value=''; f_lng.value=''; });
+$('#btnClearPhoto').addEventListener('click', ()=>{
+  inLib.value=''; inCam.value=''; preview.removeAttribute('src'); f_lat.value=''; f_lng.value='';
+});
 
+/* Silent(촬영용) */
 async function geoFromDeviceSilent(){
   if(!('geolocation' in navigator) || !isSecureContext) return null;
   try{
@@ -151,6 +201,8 @@ async function geoFromDeviceSilent(){
     }catch(__){ return null; }
   }
 }
+
+/* Verbose(수동 버튼 용) */
 async function geoFromDevice(){
   if(!('geolocation' in navigator)) { alert('이 브라우저는 위치 기능을 지원하지 않습니다.'); return null; }
   if(!isSecureContext) { alert('HTTPS 또는 http://localhost 에서만 위치 사용 가능'); return null; }
@@ -175,7 +227,11 @@ async function readJpegGpsSafe(file){
     if((marker&0xFFF0)!==0xFFE0) break;
     const size=v.getUint16(off); off+=2;
     const next=off+size-2; if(next>v.byteLength) break;
-    if(marker===0xFFE1){ if(off+6<=v.byteLength && v.getUint32(off)===0x45786966){ const c=parseExifForGps(v,off+6); if(c) return c; } }
+    if(marker===0xFFE1){
+      if(off+6<=v.byteLength && v.getUint32(off)===0x45786966){
+        const c=parseExifForGps(v,off+6); if(c) return c;
+      }
+    }
     off=next;
   }
   return null;
@@ -184,7 +240,10 @@ async function readJpegGpsSafe(file){
     const endian=view.getUint16(tiff), le=endian===0x4949; if(!le && endian!==0x4D4D) return null;
     const ifd0=tiff+getU32(view,tiff+4,le); if(!rng(ifd0,2)) return null;
     const n=getU16(view,ifd0,le); let gpsPtr=0;
-    for(let i=0;i<n;i++){ const e=ifd0+2+i*12; if(!rng(e,12)) return null; const tag=getU16(view,e,le); if(tag===0x8825){ gpsPtr=tiff+getU32(view,e+8,le); break; } }
+    for(let i=0;i<n;i++){
+      const e=ifd0+2+i*12; if(!rng(e,12)) return null; const tag=getU16(view,e,le);
+      if(tag===0x8825){ gpsPtr=tiff+getU32(view,e+8,le); break; }
+    }
     if(!gpsPtr || !rng(gpsPtr,2)) return null;
     const m=getU16(view,gpsPtr,le); let latRef='N',lonRef='E',lat=null,lon=null;
     for(let i=0;i<m;i++){
@@ -207,14 +266,23 @@ async function readJpegGpsSafe(file){
   function rng(s,l){ return s>=0 && (s+(l||0))<=v.byteLength; }
 }
 
-/* 저장(샘플) */
-$('#btnSave').addEventListener('click', ()=>{
-  const payload={ id:f_id.value, name:f_name.value, status:f_status.value, type:'노외',
-    sido:f_sido.value, sigungu:f_sigungu.value, emd:f_emd.value, addr:f_addr.value,
-    lat:f_lat.value, lng:f_lng.value };
+/* 저장 로직 (상단/하단 공용) */
+function buildPayload(){
+  const addr = f_addrR.value?.trim() || f_addrJ.value?.trim() || '';
+  return {
+    id:f_id.value, name:f_name.value, status:f_status.value, type:'노외',
+    sido:f_sido.value, sigungu:f_sigungu.value, emd:f_emd.value,
+    addr_jibun:f_addrJ.value, addr_road:f_addrR.value, addr, // 호환 필드
+    lat:f_lat.value, lng:f_lng.value
+  };
+}
+function save(){
+  const payload=buildPayload();
   console.log('SAVE(off-lot):', payload);
   alert('샘플 저장 완료(콘솔 확인). 실제 API로 교체하세요.');
-});
+}
+$('#btnSave').addEventListener('click', save);
+$('#btnSaveTop').addEventListener('click', save);
 </script>
 </body>
 </html>
