@@ -3,351 +3,182 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>브이월드 · 현재위치 더미 50 · 클러스터 · 리스트 패널</title>
-
-<!-- ★ VWorld 스크립트: key/domain 인코딩 없이 그대로 -->
-<script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
+<title>브이월드 안전 로더 · 진단 + (선택)OSM 폴백</title>
 
 <style>
-  :root{
-    --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
-    --accent:#2563eb; --accent2:#1d4ed8; --border:#20304f; --chip:#1f2a44; --chipOn:#243a7a;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
-
-  .layout{display:grid; grid-template-columns: 360px 1fr; height:100vh}
-  @media (max-width: 960px){
-    .layout{ grid-template-columns: 1fr }
-    .side{ position:fixed; z-index:30; left:12px; right:12px; top:12px }
-    .mapwrap{ height:100vh }
-  }
-  .side{
-    background:var(--panel); border:1px solid var(--border); border-radius:14px; margin:12px; padding:12px;
-    display:flex; flex-direction:column; gap:10px; max-height: calc(100vh - 24px);
-  }
-  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
-  .title{ font-weight:800; display:flex; gap:8px; align-items:center }
-  .muted{ color:var(--muted) }
-  .btn{ border:0; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer;
-    background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#fff }
-  .btn.ghost{ background:transparent; color:#c7d2fe; border:1px solid var(--border) }
-  .chipbar{ display:flex; gap:8px; flex-wrap:wrap }
-  .chip{
-    background:var(--chip); border:1px solid var(--border); color:#c7d2fe;
-    padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem;
-  }
-  .chip.active{ background:var(--chipOn); color:#fff; border-color:transparent }
-  .list{ overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 140px; background:#0c1530 }
-  .item{ padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:grid; gap:4px }
-  .item:last-child{ border-bottom:0 }
-  .item:hover{ background:rgba(37,99,235,.08) }
-  .item.active{ outline:2px solid var(--accent); outline-offset:-2px; background:rgba(37,99,235,.12) }
-  .nm{ font-weight:700 }
-  .sub{ color:var(--muted); font-size:.92rem; display:flex; gap:6px; flex-wrap:wrap }
-  .badge{ display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c }
-  .dist{ color:#9ca3af }
-
-  .mapwrap{ position:relative }
-  #map{ position:absolute; inset:0 }
-
-  .status{position:fixed;left:12px;top:12px;z-index:40;background:#0f172a;color:#e5e7eb;border:1px solid #20304f;border-radius:10px;padding:8px 10px;font-size:.92rem}
-  .ok{color:#10b981}.bad{color:#ef4444}.muted{color:#9ca3af}
-
-  /* 팝업 */
-  .ol-popup{
-    position:absolute;background:#fff;color:#111827;border-radius:8px;border:1px solid #e5e7eb;
-    min-width:230px;padding:10px 12px;transform:translate(-50%,-110%);box-shadow:0 10px 20px rgba(0,0,0,.25);pointer-events:auto
-  }
-  .ol-popup:after{
-    content:"";position:absolute;left:50%;transform:translateX(-50%);
-    bottom:-10px;width:0;height:0;border:10px solid transparent;border-top-color:#fff;filter:drop-shadow(0 -1px 0 #e5e5e5)
-  }
-  .ol-popup .tit{font-weight:800;margin-right:26px}
-  .ol-popup .sub2{color:#4b5563;font-size:.9rem}
-  .ol-popup .x{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#6b7280;font-size:18px;cursor:pointer;line-height:1}
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif;background:#0b1220;color:#e5e7eb}
+  #map{position:fixed;inset:0}
+  .panel{position:fixed;left:12px;top:12px;z-index:50;background:#0f172a;border:1px solid #20304f;border-radius:12px;padding:10px 12px;max-width:520px}
+  .panel b{color:#fff}
+  .muted{color:#9ca3af}
+  .ok{color:#10b981}.bad{color:#ef4444}.warn{color:#f59e0b}
+  .btn{border:1px solid #334155;background:transparent;color:#c7d2fe;border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer;margin-right:6px}
+  .btn.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:transparent;color:#fff}
+  pre{margin:8px 0 0;white-space:pre-wrap;font-size:.9rem;color:#cbd5e1}
 </style>
 </head>
 <body>
-<div class="status" id="stat">브이월드 초기화 중…</div>
+<div id="map" aria-label="지도"></div>
 
-<div class="layout">
-  <aside class="side">
-    <div class="row title">
-      <div>주차장(반경 <b>3km</b>)</div>
-      <div class="muted" style="margin-left:auto">총 <b id="count">0</b>곳 · 선택: <b id="sel">-</b></div>
-    </div>
-
-    <div class="row">
-      <button class="btn" id="locBtn">현재 위치</button>
-      <button class="btn ghost" id="fitBtn">전체 보기</button>
-    </div>
-
-    <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
-      <div class="chip active" data-type="">전체</div>
-      <div class="chip" data-type="노상">노상</div>
-      <div class="chip" data-type="노외">노외</div>
-      <div class="chip" data-type="부설">부설</div>
-    </div>
-
-    <div id="list" class="list" role="listbox" aria-label="주차장 목록"></div>
-  </aside>
-
-  <main class="mapwrap">
-    <div id="map" aria-label="지도"></div>
-  </main>
+<div class="panel">
+  <div><b>브이월드 로더</b> <span id="step" class="muted">대기 중…</span></div>
+  <div style="margin-top:6px">
+    <button id="retry" class="btn">다시 시도</button>
+    <button id="osm" class="btn">OSM 폴백 보기</button>
+    <button id="clear" class="btn">오버레이 숨기기</button>
+  </div>
+  <pre id="log"></pre>
 </div>
 
 <script>
-(function(){
-  /* ===== 상수/상태 ===== */
-  const FALLBACK_CENTER = { lng:128.1136, lat:36.1398 }; // 김천(교통안전공단)
-  const DEMO_COUNT = 50, RADIUS_KM = 3.0;
-  const $ = (s)=>document.querySelector(s);
-  const stat=$('#stat'), listEl=$('#list'), countEl=$('#count'), selEl=$('#sel');
+/* ====== 설정 (키/도메인 그대로) ====== */
+const VWORLD_URL =
+  "https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev";
 
-  let ORIGIN = {...FALLBACK_CENTER};
-  let currentType = "";   // '', '노상','노외','부설'
-  let ROWS_ALL = [];      // {id,lng,lat,nm,addr,type,distKm}
-  let ROWS_VIEW = [];     // 필터/반경 적용 결과
+/* ====== DOM 유틸 ====== */
+const $ = (s)=>document.querySelector(s);
+const stepEl = $('#step'), logEl = $('#log');
+function log(msg){ logEl.textContent += msg + '\n'; }
+function step(msg, cls=''){ stepEl.textContent = msg; stepEl.className = cls || 'muted'; }
 
-  const ok  = (m)=> stat.innerHTML = `<span class="ok">✔</span> ${m}`;
-  const bad = (m)=> stat.innerHTML = `<span class="bad">✖</span> ${m}`;
-
-  /* ===== 지도/레이어 ===== */
-  let map, rawSource, clusterSource, clusterLayer, meSource, meLayer, overlay, popupEl;
-
-  const PARK_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
-  const PERSON_ICON_SVG =
-  `<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'>
-     <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs>
-     <path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/>
-     <circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/>
-   </svg>`;
-
-  const iconStyle = new ol.style.Style({
-    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(PARK_ICON_SVG), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction', scale:1.0 })
+/* ====== 스크립트 로더 ====== */
+function loadScript(url, timeoutMs=8000){
+  return new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    const tid = setTimeout(()=>{
+      s.remove();
+      reject(new Error('timeout'));
+    }, timeoutMs);
+    s.src = url; s.async = true; s.defer = false;
+    s.onload = ()=>{ clearTimeout(tid); resolve('loaded'); };
+    s.onerror = (e)=>{ clearTimeout(tid); reject(new Error('onerror')); };
+    document.head.appendChild(s);
   });
-  const meStyle = new ol.style.Style({
-    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(PERSON_ICON_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction', scale:1.0 })
-  });
+}
 
-  function km(a,b){ const R=6371,toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng); const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2); const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2; return 2*R*Math.asin(Math.sqrt(t)); }
-
-  function init(){
-    if(!(window.vw && vw.ol3)){ bad('브이월드 객체(vw.ol3) 미탑재 — apiKey·domain 확인'); return; }
-
-    const vmap = new vw.ol3.Map("map", {
-      basemapType: vw.ol3.BasemapType.GRAPHIC,
-      controlDensity: vw.ol3.DensityType.BASIC,
-      interactionDensity: vw.ol3.DensityType.BASIC,
-      controlsAutoArrange: true
-    });
-
-    map = vmap.getMap ? vmap.getMap() : (vmap.map || vmap);
-    if(!(window.ol && map && map.getView)){ bad('OpenLayers 핸들 확보 실패'); return; }
-    window.olmap = map;
-
-    map.getView().setCenter(ol.proj.fromLonLat([FALLBACK_CENTER.lng, FALLBACK_CENTER.lat]));
-    map.getView().setZoom(14);
-
-    // 소스/레이어
-    rawSource     = new ol.source.Vector();
-    clusterSource = new ol.source.Cluster({ distance:40, minDistance:10, source:rawSource });
-    clusterLayer  = new ol.layer.Vector({ source:clusterSource, style: clusterStyle, zIndex:110 });
-    meSource      = new ol.source.Vector();
-    meLayer       = new ol.layer.Vector({ source:meSource, zIndex:120 });
-    map.addLayer(clusterLayer); map.addLayer(meLayer);
-
-    // 팝업
-    popupEl = document.createElement('div');
-    popupEl.className = 'ol-popup';
-    popupEl.innerHTML = `<button class="x" aria-label="닫기">×</button><div class="tit"></div><div class="sub2 addr"></div><div class="sub2 meta"></div>`;
-    overlay = new ol.Overlay({ element: popupEl, positioning:'bottom-center', stopEvent:true, offset:[0,-14] });
-    map.addOverlay(overlay);
-    popupEl.querySelector('.x').addEventListener('click', closePopup);
-    document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
-
-    // 클릭: 클러스터 확대 / 단일 팝업
-    map.on('singleclick', onMapClick);
-
-    // UI 이벤트
-    $('#locBtn').addEventListener('click', autoLocate);
-    $('#fitBtn').addEventListener('click', fitAll);
-    $('#typeBar').addEventListener('click', onTypeChip);
-
-    // 시드
-    autoLocate(); // 가능하면 현재위치, 실패 시 김천
-  }
-
-  function clusterStyle(feature){
-    const members = feature.get('features')||[];
-    const size = members.length;
-    if(size>1){
-      return new ol.style.Style({
-        image:new ol.style.Circle({
-          radius: Math.max(12, Math.min(28, 10 + Math.log(size)*8)),
-          fill: new ol.style.Fill({color:[37,99,235,0.92]}),
-          stroke:new ol.style.Stroke({color:'#fff',width:2})
-        }),
-        text:new ol.style.Text({ text:String(size), fill:new ol.style.Fill({color:'#fff'}), stroke:new ol.style.Stroke({color:'#000',width:3}) })
-      });
-    }
-    const m = members[0];
-    return (m && m.getStyle && m.getStyle()) || iconStyle;
-  }
-
-  function closePopup(){ overlay.setPosition(undefined); highlightList(null); }
-
-  function onMapClick(evt){
-    let handled=false;
-    map.forEachFeatureAtPixel(evt.pixel,(feature, layer)=>{
-      if(layer!==clusterLayer) return;
-      const members = feature.get('features')||[];
-      if(members.length>1){
-        const ex = ol.extent.createEmpty();
-        members.forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
-        map.getView().fit(ex, { duration:250, maxZoom:17, padding:[40,20,40,380] });
-      }else if(members.length===1){
-        const f = members[0], p=f.getProperties();
-        openPopupForFeature(f, evt.coordinate);
-        highlightList(p.__id || p.id);
+/* ====== vw.ol3 준비 대기 ====== */
+function waitVWorldReady(maxMs=5000){
+  const start = performance.now();
+  return new Promise((resolve,reject)=>{
+    (function tick(){
+      if (window.vw && vw.ol3){ resolve(true); return; }
+      if (performance.now() - start > maxMs){
+        reject(new Error('vw.ol3 not ready')); return;
       }
-      handled=true; return true;
-    },{hitTolerance:6});
-    if(!handled) closePopup();
-  }
+      setTimeout(tick, 100);
+    })();
+  });
+}
 
-  function openPopupForFeature(f, coord){
-    const p=f.getProperties();
-    popupEl.querySelector('.tit').textContent  = p.nm || '주차장';
-    popupEl.querySelector('.addr').textContent = p.addr || '';
-    popupEl.querySelector('.meta').textContent = `형태: ${p.type||''} · 좌표: ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}`;
-    overlay.setPosition(coord);
-    selEl.textContent = p.nm || '-';
-  }
+/* ====== OL6 로더(OSM 폴백용) ====== */
+async function ensureOpenLayers6(){
+  if (window.ol && ol.proj && ol.layer && ol.source) return;
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.js", 8000);
+  // 간단 체크
+  if(!(window.ol && ol.Map)){ throw new Error('OpenLayers 6 load failed'); }
+}
 
-  /* ===== 현재위치/더미 ===== */
-  function setMe(lng,lat,fly=true){
-    ORIGIN={lng,lat};
-    meSource.clear();
-    const c=ol.proj.fromLonLat([lng,lat]);
-    const me=new ol.Feature({ geometry:new ol.geom.Point(c) });
-    me.setStyle(meStyle);
-    meSource.addFeature(me);
-    if(fly){ map.getView().setCenter(c); map.getView().setZoom(15); }
-  }
+/* ====== 브이월드 지도 만들기 ====== */
+function buildVWorld(){
+  // vw.ol3 가정하에 동작
+  const vmap = new vw.ol3.Map("map", {
+    basemapType: vw.ol3.BasemapType.GRAPHIC,
+    controlDensity: vw.ol3.DensityType.BASIC,
+    interactionDensity: vw.ol3.DensityType.BASIC,
+    controlsAutoArrange: true
+  });
+  const map = vmap.getMap ? vmap.getMap() : (vmap.map || vmap);
+  if(!(window.ol && map && map.getView)) throw new Error('OpenLayers handle missing');
 
-  function generateRowsAround(lng,lat,n=DEMO_COUNT,radiusKm=RADIUS_KM){
-    const rows=[];
-    for(let i=0;i<n;i++){
-      const rkm=Math.random()*radiusKm;
-      const ang=Math.random()*Math.PI*2;
-      const dLat=(rkm/111)*Math.sin(ang);
-      const dLng=(rkm/(111*Math.cos(lat*Math.PI/180)))*Math.cos(ang);
-      const y=lat+dLat, x=lng+dLng;
-      const type=['노상','노외','부설'][i%3];
-      rows.push({ id:'DM-'+i, nm:`더미 ${type} 주차장 ${i+1}`, addr:`반경 ${rkm.toFixed(2)}km`, type, lng:x, lat:y });
+  // 김천 중심
+  const center = ol.proj.fromLonLat([128.1136, 36.1398]);
+  map.getView().setCenter(center);
+  map.getView().setZoom(14);
+
+  // 샘플 마커
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
+  const iconStyle = new ol.style.Style({
+    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(svg), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction' })
+  });
+  const f = new ol.Feature({ geometry:new ol.geom.Point(center) });
+  f.setStyle(iconStyle);
+  const src = new ol.source.Vector({ features:[f] });
+  const layer = new ol.layer.Vector({ source: src, zIndex:100 });
+  map.addLayer(layer);
+
+  return map;
+}
+
+/* ====== OSM 폴백 지도 ====== */
+async function buildOSM(){
+  await ensureOpenLayers6();
+  const map = new ol.Map({
+    target: 'map',
+    layers: [ new ol.layer.Tile({ source:new ol.source.OSM() }) ],
+    view: new ol.View({ center: ol.proj.fromLonLat([128.1136, 36.1398]), zoom: 14 })
+  });
+  // 동일한 샘플 마커
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#22c55e'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
+  const iconStyle = new ol.style.Style({
+    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(svg), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction' })
+  });
+  const center = ol.proj.fromLonLat([128.1136,36.1398]);
+  const f = new ol.Feature({ geometry:new ol.geom.Point(center) }); f.setStyle(iconStyle);
+  const src = new ol.source.Vector({ features:[f] });
+  map.addLayer(new ol.layer.Vector({ source: src, zIndex:100 }));
+  return map;
+}
+
+/* ====== 메인 플로우 ====== */
+async function boot(){
+  // 상태 초기화
+  logEl.textContent = '';
+  step('브이월드 스크립트 로드 중…');
+  try{
+    await loadScript(VWORLD_URL, 8000);
+    step('브이월드 로드됨, 엔진 준비 대기…', 'warn');
+    log('script loaded OK (HTTP 200일 가능). 이제 vw.ol3 준비 대기');
+
+    await waitVWorldReady(5000);
+    step('vw.ol3 준비됨 → 지도 생성', 'ok');
+
+    window.olmap = buildVWorld();
+    step('브이월드 지도 OK', 'ok');
+    log('브이월드 지도 초기화 성공');
+  }catch(err){
+    // 실패 케이스 설명
+    if(err.message==='timeout'){
+      step('브이월드 스크립트 타임아웃', 'bad');
+      log('❌ map.vworld.kr 응답 지연: 네트워크/방화벽/서버 이슈 의심');
+    }else if(err.message==='onerror'){
+      step('브이월드 스크립트 로드 실패', 'bad');
+      log('❌ onerror: URL 차단/도메인 불일치/키 권한 실패(403/502) 가능');
+    }else if(err.message==='vw.ol3 not ready'){
+      step('vw.ol3 객체가 준비되지 않음', 'bad');
+      log('❌ 응답은 있었으나 엔진 노출 실패: 502/권한 실패/내부 오류 가능');
+    }else{
+      step('예상 외 오류: '+err.message, 'bad');
+      log('❌ '+(err.stack||err));
     }
-    return rows.map(r=>({ ...r, distKm: km({lng,lat},{lng:r.lng,lat:r.lat}) }));
+    log('\n도움말:\n- 개발자도구 Network에서 위 스크립트 URL 상태 코드를 확인하세요(403/502/ERR_* 등)\n- domain/apiKey가 브이월드 콘솔 등록값과 정확히 일치해야 합니다 (서브도메인까지)\n- 보안장비/프록시가 map.vworld.kr을 차단하는지 확인');
   }
+}
 
-  function rebuildMarkers(rows){
-    rawSource.clear();
-    const feats = rows.map(r=>{
-      const c=ol.proj.fromLonLat([r.lng,r.lat]);
-      const f=new ol.Feature({ geometry:new ol.geom.Point(c), __id:r.id, ...r });
-      f.setStyle(iconStyle);
-      return f;
-    });
-    rawSource.addFeatures(feats);
+/* ====== 버튼 ====== */
+$('#retry').addEventListener('click', boot);
+$('#clear').addEventListener('click', ()=>$('.panel').style.display='none');
+$('#osm').addEventListener('click', async ()=>{
+  try{
+    step('OSM 폴백 로드 중…', 'warn');
+    window.olmap = await buildOSM();
+    step('OSM 폴백 표시 중', 'ok');
+  }catch(e){
+    step('OSM 폴백 실패: '+e.message, 'bad');
   }
+});
 
-  function applyFilter(){
-    // 반경은 생성 시 이미 충족, 형태만 필터
-    ROWS_VIEW = ROWS_ALL.filter(r => !currentType || r.type===currentType)
-                        .sort((a,b)=>a.distKm-b.distKm);
-    countEl.textContent = String(ROWS_VIEW.length);
-    buildList(ROWS_VIEW);
-    rebuildMarkers(ROWS_VIEW);
-  }
-
-  /* ===== 리스트 패널 ===== */
-  function buildList(rows){
-    if(rows.length===0){
-      listEl.innerHTML = `<div class="item"><div class="nm">결과 없음</div><div class="sub">반경 3km / 형태: ${currentType||'전체'}</div></div>`;
-      return;
-    }
-    listEl.innerHTML = rows.map((r,i)=>`
-      <div class="item" data-id="${r.id}" role="option" tabindex="0">
-        <div class="nm">${i+1}. ${r.nm}</div>
-        <div class="sub"><span class="badge">${r.type}</span><span class="dist">${r.distKm.toFixed(2)} km</span><span>${r.addr}</span></div>
-      </div>
-    `).join('');
-    listEl.querySelectorAll('.item').forEach(el=>{
-      el.addEventListener('click', ()=> focusItem(el.dataset.id));
-      el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ focusItem(el.dataset.id); e.preventDefault(); }});
-    });
-  }
-
-  function highlightList(id){
-    listEl.querySelectorAll('.item').forEach(el=> el.classList.toggle('active', el.dataset.id===id));
-  }
-
-  function focusItem(id){
-    const r = ROWS_VIEW.find(x=>x.id===id) || ROWS_ALL.find(x=>x.id===id);
-    if(!r) return;
-    const coord=ol.proj.fromLonLat([r.lng,r.lat]);
-    map.getView().setCenter(coord);
-    map.getView().setZoom(16);
-    openPopupForFeature(new ol.Feature({geometry:new ol.geom.Point(coord), ...r}), coord);
-    highlightList(id);
-  }
-
-  function onTypeChip(e){
-    const chip=e.target.closest('.chip'); if(!chip) return;
-    chip.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
-    chip.classList.add('active');
-    currentType = chip.dataset.type || "";
-    closePopup(); applyFilter();
-  }
-
-  /* ===== 기타 ===== */
-  function fitAll(){
-    const extent = ol.extent.createEmpty();
-    meSource.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
-    rawSource.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
-    if(!ol.extent.isEmpty(extent)){
-      map.getView().fit(extent, { duration:400, padding:[40,20,40,380], maxZoom:16 });
-    }
-  }
-
-  function seedAt(lng,lat,msg){
-    setMe(lng,lat,true);
-    ROWS_ALL = generateRowsAround(lng,lat,DEMO_COUNT,RADIUS_KM);
-    applyFilter();
-    ok(msg);
-  }
-
-  function autoLocate(){
-    const isSecure = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-    const fallback = ()=> seedAt(FALLBACK_CENTER.lng, FALLBACK_CENTER.lat, '위치 실패/HTTP → 김천 기준 더미 50 생성');
-
-    if(!isSecure || !navigator.geolocation){ fallback(); return; }
-
-    let fixed=false;
-    const opts={ enableHighAccuracy:true, maximumAge:5000, timeout:8000 };
-
-    const apply=(lng,lat)=>{ if(fixed) return; fixed=true; seedAt(lng,lat, '현재 위치 주변 더미 50 생성 완료'); };
-
-    const wid = navigator.geolocation.watchPosition(p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); }, ()=>{}, opts);
-    navigator.geolocation.getCurrentPosition(p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); }, fallback, opts);
-  }
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();
+/* ====== 자동 시도 ====== */
+document.addEventListener('DOMContentLoaded', boot);
 </script>
 </body>
 </html>
