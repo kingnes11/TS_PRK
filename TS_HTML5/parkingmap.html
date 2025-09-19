@@ -6,7 +6,7 @@
 <title>주차장 지도 · 현재위치 중심 · 좌측 리스트 · 5km 반경</title>
 
 <!-- VWorld 2D API (브이월드 콘솔에 서비스 URL로 도메인 등록 必) -->
-<script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=YOUR_API_KEY&domain=YOUR_DOMAIN"></script>
+<script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
 
 <style>
   :root{
@@ -28,17 +28,13 @@
   }
   .side .title{ font-weight:800; display:flex; gap:8px; align-items:center; }
   .side .muted{ color:var(--muted) }
-  .typebar{
-    display:flex; gap:8px; flex-wrap:wrap;
-  }
+  .typebar{ display:flex; gap:8px; flex-wrap:wrap; }
   .chip{
     background:var(--chip); border:1px solid var(--border); color:#c7d2fe;
     padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem;
   }
   .chip.active{ background:var(--chipOn); color:#fff; border-color:transparent }
-  .list{
-    overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 120px;
-  }
+  .list{ overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 120px; }
   .item{ padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:grid; gap:4px }
   .item:last-child{ border-bottom:0 }
   .item:hover{ background:rgba(37,99,235,.08) }
@@ -76,7 +72,7 @@
     <aside class="side">
       <div class="title">김천시 주차장 <span class="muted">반경 5km</span></div>
 
-      <!-- 하단(요청) 형태 선택을 좌측 패널에 고정 버튼으로 제공 -->
+      <!-- 형태 선택 칩 -->
       <div class="typebar" id="typeBar" role="group" aria-label="주차장 형태 필터">
         <div class="chip active" data-type="">전체</div>
         <div class="chip" data-type="노상">노상</div>
@@ -110,8 +106,8 @@
 /* =========================
    0) 상수/유틸
    ========================= */
-const VWORLD_KEY = "YOUR_API_KEY";
-const VWORLD_DOMAIN = location.hostname;
+const VWORLD_KEY    = "CF9A371B-35A6-3822-8315-6592C8342E82";
+const VWORLD_DOMAIN = "psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev";
 
 const GIMCHEON_CENTER = { lng:128.1136, lat:36.1398 };  // 기본 중심(김천시)
 const RADIUS_M = 5000;                                   // ★ 반경 5km
@@ -197,7 +193,6 @@ function initMap(){
            <div class="sub2">${p.addr || ''}</div>
            <div class="sub2">형태: ${p.type || '주차장'} · 좌표: ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}</div>`;
         selEl.textContent = p.nm || '주차장';
-        // 리스트 하이라이트
         highlightListItem(p.nm);
       }
       handled = true; return true;
@@ -206,9 +201,7 @@ function initMap(){
   });
 }
 
-/* 클러스터/아이콘 스타일
-   - 단일 포인트는 파란 'P' 아이콘(SVG)
-   - 클러스터는 파란 원 + 숫자 */
+/* 클러스터/아이콘 스타일 */
 const PARK_ICON_SVG = `
 <svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
   <circle cx='18' cy='18' r='16' fill='#2563eb'/>
@@ -397,7 +390,7 @@ function rebuildMarkers(rows){
     return f;
   });
   vectorSrc.clear(); vectorSrc.addFeatures(feats);
-  // 전체 보기(현재 위치로 이미 이동해 둔 경우라도, 전체보기를 누르지 않는 한 중심은 유지)
+  // 중심은 사용자 조작/현재위치에 맡김
 }
 
 /* =========================
@@ -412,6 +405,11 @@ function setOrigin(lng, lat, fly=true){
   }
   recompute();
 }
+function ensureRadius(){
+  if(!radiusLayer.getSource().getFeatures().length){
+    drawOrigin(ORIGIN.lng, ORIGIN.lat);
+  }
+}
 function getMyLocation(){
   const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
   if(!secureOK){ showToast('현재 위치는 HTTPS 또는 localhost에서만 사용 가능'); return; }
@@ -422,8 +420,9 @@ function getMyLocation(){
 }
 
 /* =========================
-   6) 타입 버튼(하단=요청) 동작
+   6) 타입 버튼(칩) 동작
    ========================= */
+let currentType = ""; // '', '노상','노외','부설'
 function initTypeBar(){
   const bar = $('#typeBar');
   bar.addEventListener('click', (e)=>{
@@ -446,8 +445,9 @@ async function start(){
   getMyLocation();
   // 2) 데이터 로드 후 ORIGIN 기준으로 5km + 타입필터로 뿌리기
   await loadParking();
+  // 3) (위치 실패 시) 기본 원도 표시
+  ensureRadius();
 
-  // 좌측 패널이 모바일에서 가려질 수 있어 안내 토스트
   showToast('왼쪽 목록에서 주차장을 선택하세요');
 }
 
@@ -459,6 +459,7 @@ document.getElementById('fitBtn').addEventListener('click', ()=>{
   radiusLayer.getSource().getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
   vectorSrc.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
   if(!ol.extent.isEmpty(extent)){
+    // 좌측 패널 폭(340px) 고려해 패딩 조정
     vmap.getView().fit(extent, {duration:400, padding:[80,20,80,360], maxZoom:16});
   }
 });
