@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Parking Map (VWorld 2D)</title>
+
+<!-- 브이월드 2D 지도 API -->
+<script type="text/javascript" src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82"></script>
+
+<style>
+  :root{
+    --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
+    --accent:#3b82f6; --accent-2:#2563eb; --ring:rgba(59,130,246,.35);
+    --chip:#0b1220; --border:#20304f;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif;
+  }
+  header{
+    position:fixed; top:0; inset-inline:0; z-index:10;
+    background:linear-gradient(180deg,#0b1220cc,#0b122000);
+    padding:10px 12px; display:flex; gap:8px; align-items:center;
+  }
+  header .title{font-weight:700}
+  header .pill{
+    margin-left:auto; display:flex; gap:6px; align-items:center; font-size:.9rem; color:var(--muted)
+  }
+  #map{ position:fixed; inset:0; }
+
+  /* 플로팅 패널 */
+  .panel{
+    position:fixed; left:12px; right:12px; bottom:12px; z-index:20;
+    display:grid; gap:8px;
+  }
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px; padding:10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.35);
+  }
+  .controls{
+    display:grid; grid-template-columns: 1fr 1fr; gap:8px;
+  }
+  @media (min-width: 720px){ .controls{ grid-template-columns: 2fr 1fr 1fr 1fr } }
+
+  .control{
+    display:flex; align-items:center; gap:8px; border:1px solid var(--border);
+    border-radius:12px; padding:10px 12px; background:transparent;
+  }
+  .control:focus-within{ outline:3px solid var(--ring); outline-offset:1px }
+  select,input{ width:100%; border:0; outline:0; background:transparent; color:var(--text); font-size:1rem }
+
+  .btns{ display:flex; gap:8px; flex-wrap:wrap }
+  .btn{
+    border:0; border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:700;
+    background:linear-gradient(180deg,var(--accent),var(--accent-2)); color:#fff;
+  }
+  .btn.ghost{ background:transparent; color:var(--accent); border:1px solid var(--border) }
+  .hint{ color:var(--muted); font-size:.85rem }
+
+  /* 토스트 */
+  .toast{
+    position:fixed; left:50%; transform:translateX(-50%);
+    bottom:88px; z-index:30; background:#111827; color:#fff;
+    border:1px solid #374151; padding:10px 12px; border-radius:10px; display:none;
+  }
+
+  /* 작은 기기에서 여백 확보 */
+  @supports (padding: max(0px)) {
+    header{ padding-top: max(10px, env(safe-area-inset-top)); }
+    .panel{ padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="브이월드 2D 지도"></div>
+
+  <header>
+    <div class="title">주차장 지도</div>
+    <div class="pill">
+      <span id="count">0</span>곳 표시
+    </div>
+  </header>
+
+  <!-- 검색/필터 + 액션 -->
+  <div class="panel">
+    <div class="card">
+      <div class="controls" role="search">
+        <div class="control"><input id="q" type="search" placeholder="주차장명 검색 (예: 연남로)" aria-label="주차장명 검색" /></div>
+        <div class="control">
+          <select id="type" aria-label="주차장형태">
+            <option value="">형태(전체)</option>
+            <option value="노상">노상</option>
+            <option value="노외">노외</option>
+            <option value="부설">부설</option>
+          </select>
+        </div>
+        <div class="control">
+          <select id="sido" aria-label="시도">
+            <option value="">시도(전체)</option>
+          </select>
+        </div>
+        <div class="control">
+          <select id="sigungu" aria-label="시군구" disabled>
+            <option value="">시군구(전체)</option>
+          </select>
+        </div>
+      </div>
+      <div class="btns" style="margin-top:8px">
+        <button class="btn" id="fitBtn">전체 보기</button>
+        <button class="btn ghost" id="locBtn">내 위치</button>
+        <button class="btn ghost" id="resetBtn">초기화</button>
+        <span class="hint" id="hint">브이월드 지도 · 클라이언트 필터</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================
+   1) 데모 데이터 (노상·노외·부설만)
+   ========================= */
+const DATA = [
+  // 서울
+  {id:"PRK-0002", nm:"연남로 노상",   type:"노상", sido:"서울특별시", sigungu:"마포구",    lat:37.5663, lng:126.9239},
+  {id:"PRK-0003", nm:"상암DMC 부설",  type:"부설", sido:"서울특별시", sigungu:"마포구",    lat:37.5779, lng:126.8893},
+  // 경기
+  {id:"PRK-0004", nm:"분당구청 노외", type:"노외", sido:"경기도",     sigungu:"성남시 분당구", lat:37.3584, lng:127.1220},
+  // 대전
+  {id:"PRK-0007", nm:"DCC 노외",      type:"노외", sido:"대전광역시", sigungu:"서구",      lat:36.3511, lng:127.3846},
+  {id:"PRK-0008", nm:"KAIST 부설",    type:"부설", sido:"대전광역시", sigungu:"유성구",    lat:36.3726, lng:127.3609},
+  {id:"PRK-0009", nm:"유성 홈플 노상", type:"노상", sido:"대전광역시", sigungu:"유성구",    lat:36.3557, lng:127.3439}
+];
+
+/* 시도/시군구 목록 생성 */
+const ADM = {};
+for(const r of DATA){
+  ADM[r.sido] = ADM[r.sido] || new Set();
+  ADM[r.sido].add(r.sigungu);
+}
+
+/* =========================
+   2) VWorld 지도 초기화
+   ========================= */
+let vmap;               // 지도 인스턴스
+let markerLayer;        // 마커 레이어
+const featureIndex = new Map(); // id -> feature 매핑(필터/갱신)
+
+function initMap(){
+  // 2D 지도 옵션
+  vw.ol3.MapOptions = {
+    basemapType: vw.ol3.BasemapType.GRAPHIC,
+    controlDensity: vw.ol3.DensityType.EMPTY,
+    interactionDensity: vw.ol3.DensityType.BASIC,
+    controlsAutoArrange: true,
+    homePosition: vw.ol3.CameraPosition,
+    initPosition: vw.ol3.CameraPosition
+  };
+
+  vmap = new vw.ol3.Map("map", vw.ol3.MapOptions);
+  markerLayer = new vw.ol3.layer.Marker(vmap);
+  vmap.addLayer(markerLayer);
+
+  // 마커 생성
+  for(const r of DATA){
+    const opt = {
+      x: r.lng, y: r.lat, epsg: "EPSG:4326",
+      title: r.nm,
+      contents: `<strong>${r.nm}</strong><br>${r.sido} ${r.sigungu}<br><em>${r.type}</em><br>
+        <a href="${detailUrl(r)}" style="color:#2563eb;text-decoration:underline">상세보기</a>`,
+      iconUrl: "https://map.vworld.kr/images/ol3/marker_blue.png", // 단일 아이콘 사용
+      text: { text: r.type, offsetY: 24, fill:{color:"#000"}, stroke:{color:"#fff", width:2} },
+      attr: { id: r.id, type: r.type, sido: r.sido, sigungu: r.sigungu, name: r.nm }
+    };
+    const f = markerLayer.addMarker(opt);
+    featureIndex.set(r.id, f);
+  }
+
+  // 처음 화면 - 전체 보기
+  fitAll();
+
+  // 마커 hover 시 id를 attribute에서 꺼내 쓸 수 있음 (필요 시 확장)
+  vmap.on('pointermove', function(evt){
+    vmap.getTargetElement().style.cursor = vmap.forEachFeatureAtPixel(evt.pixel, (f, layer)=>{
+      return (layer && layer.className === 'vw.ol3.layer.Marker') ? 'pointer' : null;
+    }) ? 'pointer' : '';
+  });
+}
+
+/* 상세 페이지 URL (노상/노외/부설에 따라) */
+function detailUrl(r){
+  if(r.type === "노상") return `offpaking.html?id=${encodeURIComponent(r.id)}`;
+  if(r.type === "노외") return `onpaking.html?id=${encodeURIComponent(r.id)}`;
+  return `buildpaking.html?id=${encodeURIComponent(r.id)}`;
+}
+
+/* =========================
+   3) 필터/검색
+   ========================= */
+const $ = (s)=>document.querySelector(s);
+const q = $('#q'), type = $('#type'), sido = $('#sido'), sigungu = $('#sigungu');
+const countEl = $('#count');
+
+function initFilters(){
+  // 시도 채우기
+  Object.keys(ADM).forEach(s => sido.add(new Option(s, s)));
+  // 연동
+  sido.addEventListener('change', ()=>{
+    sigungu.innerHTML = '<option value="">시군구(전체)</option>';
+    if(!sido.value){ sigungu.disabled = true; doFilter(); return; }
+    sigungu.disabled = false;
+    [...ADM[sido.value]].sort().forEach(g=> sigungu.add(new Option(g, g)));
+    doFilter();
+  });
+  sigungu.addEventListener('change', doFilter);
+  type.addEventListener('change', doFilter);
+  q.addEventListener('input', debounce(doFilter, 120));
+}
+
+function doFilter(){
+  const kw = q.value.trim();
+  const t  = type.value;
+  const s  = sido.value;
+  const g  = sigungu.value;
+
+  let visible = 0;
+  for(const r of DATA){
+    const f = featureIndex.get(r.id);
+    const pass =
+      (!t || r.type===t) &&
+      (!s || r.sido===s) &&
+      (!g || r.sigungu===g) &&
+      (!kw || r.nm.includes(kw));
+    // 마커 보이기/숨기기
+    if(pass){ markerLayer.showMarker(f); visible++; }
+    else { markerLayer.hideMarker(f); }
+  }
+  countEl.textContent = visible;
+}
+
+/* 전체 보기 (보이는 마커 기준) */
+function fitAll(){
+  const extent = ol.extent.createEmpty();
+  let any=false;
+  markerLayer.getSource().getFeatures().forEach(f=>{
+    if(f.getStyle && f.getStyle() && f.get('hidden')) return;
+    const coord = f.getGeometry().getCoordinates();
+    ol.extent.extend(extent, ol.extent.boundingExtent([coord]));
+    any=true;
+  });
+  if(any){
+    vmap.getView().fit(extent, {duration:500, padding:[80,20,220,20], maxZoom:16});
+  }else{
+    // 대한민국 대략 중심
+    vmap.getView().setCenter(ol.proj.transform([127.8, 36.3], 'EPSG:4326', 'EPSG:900913'));
+    vmap.getView().setZoom(7);
+  }
+}
+
+/* =========================
+   4) 내 위치 이동 (HTTPS/localhost 필요)
+   ========================= */
+const toast = $('#toast');
+function showToast(msg, ms=2600){
+  toast.textContent = msg;
+  toast.style.display = 'block';
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(()=> toast.style.display='none', ms);
+}
+
+function useMyLocation(){
+  const secureOK = (location.protocol === 'https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
+  if(!secureOK){
+    showToast('브라우저 정책상 내 위치는 HTTPS 또는 localhost에서만 사용 가능합니다.');
+    // HTTPS가 아니라면: 대한민국 중심으로 이동
+    vmap.getView().setCenter(ol.proj.transform([127.8,36.3],'EPSG:4326','EPSG:900913'));
+    vmap.getView().setZoom(7);
+    return;
+  }
+
+  if(!navigator.geolocation){
+    showToast('이 기기에서 위치를 지원하지 않습니다.');
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude, longitude} = pos.coords;
+    const coord = ol.proj.transform([longitude, latitude], 'EPSG:4326', 'EPSG:900913');
+    vmap.getView().setCenter(coord);
+    vmap.getView().setZoom(16);
+
+    // 내 위치 임시 마커(파란 점)
+    const style = new ol.style.Style({
+      image: new ol.style.Circle({ radius: 6,
+        fill: new ol.style.Fill({color: [59,130,246,0.9]}),
+        stroke: new ol.style.Stroke({color:[255,255,255,0.9], width:2})
+      })
+    });
+    // OpenLayers 벡터 레이어로 간단히 표시
+    const point = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+    point.setStyle(style);
+    if(!window.__meLayer){
+      window.__meLayer = new ol.layer.Vector({ source: new ol.source.Vector() });
+      vmap.addLayer(window.__meLayer);
+    }
+    window.__meLayer.getSource().clear();
+    window.__meLayer.getSource().addFeature(point);
+  }, err=>{
+    showToast('위치 접근이 거부되었거나 실패했습니다.');
+  }, { enableHighAccuracy:true, timeout:8000, maximumAge:10000 });
+}
+
+/* =========================
+   5) 유틸 · 이벤트
+   ========================= */
+function debounce(fn, wait){
+  let t; return function(...args){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,args), wait); }
+}
+
+function initUI(){
+  document.getElementById('fitBtn').addEventListener('click', fitAll);
+  document.getElementById('locBtn').addEventListener('click', useMyLocation);
+  document.getElementById('resetBtn').addEventListener('click', ()=>{
+    q.value=''; type.value=''; sido.value=''; sigungu.innerHTML='<option value="">시군구(전체)</option>'; sigungu.disabled=true;
+    doFilter(); fitAll();
+  });
+
+  // 쿼리스트링으로 특정 주차장 강조 (예: ?id=PRK-0008)
+  const u = new URL(location.href);
+  const target = u.searchParams.get('id');
+  if(target && featureIndex.has(target)){
+    const f = featureIndex.get(target);
+    const coord = f.getGeometry().getCoordinates();
+    vmap.getView().setCenter(coord); vmap.getView().setZoom(17);
+    showToast('선택한 주차장으로 이동했습니다.');
+  }
+}
+
+/* =========================
+   6) 시작
+   ========================= */
+initMap();
+initFilters();
+doFilter();
+initUI();
+</script>
+</body>
+</html>
