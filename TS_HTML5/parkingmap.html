@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>주차장 지도 · OSM 고정(네트워크 차단 대응) · 반경 3km</title>
+<title>주차장 지도 · OSM 전용 · 반경 3km</title>
 
-<!-- OpenLayers (cdnjs: 네트워크 허용됨) -->
+<!-- OpenLayers (cdnjs) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.js"></script>
 
@@ -19,72 +19,48 @@
   html,body{height:100%}
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
 
-  /* 상단 상태바 */
-  .status{
-    position:fixed; inset:12px 12px auto 12px; z-index:50;
-    background:#0f172a; border:1px solid var(--border); border-radius:12px; padding:8px 12px;
-    font-size:.92rem; color:var(--muted);
-  }
-  .status b{ color:#fff }
-  .status .ok{ color:var(--ok) }
-  .status .bad{ color:var(--bad) }
+  .status{position:fixed;inset:12px 12px auto 12px;z-index:50;background:#0f172a;border:1px solid var(--border);border-radius:12px;padding:8px 12px;font-size:.92rem;color:var(--muted)}
+  .status b{color:#fff}.ok{color:var(--ok)}.bad{color:var(--bad)}
 
-  .layout{display:grid; grid-template-columns: 360px 1fr; height:100vh}
+  .layout{display:grid;grid-template-columns:360px 1fr;height:100vh}
   @media (max-width: 960px){
-    .layout{ grid-template-columns: 1fr }
-    .side{ position:fixed; z-index:30; left:12px; right:12px; top:56px }
-    .mapwrap{ height:100vh }
+    .layout{grid-template-columns:1fr}
+    .side{position:fixed;z-index:30;left:12px;right:12px;top:56px}
+    .mapwrap{height:100vh}
   }
-  .side{
-    background:var(--panel); border:1px solid var(--border); border-radius:14px; margin:12px; padding:12px;
-    display:flex; flex-direction:column; gap:10px; max-height: calc(100vh - 24px);
-  }
-  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
-  .title{ font-weight:800; display:flex; gap:8px; align-items:center; }
-  .muted{ color:var(--muted) }
-  .btn{ border:0; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer;
-    background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#fff }
-  .btn.ghost{ background:transparent; color:#c7d2fe; border:1px solid var(--border) }
-  .chipbar{ display:flex; gap:8px; flex-wrap:wrap }
-  .chip{
-    background:var(--chip); border:1px solid var(--border); color:#c7d2fe;
-    padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem;
-  }
-  .chip.active{ background:var(--chipOn); color:#fff; border-color:transparent }
-  .list{ overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 140px }
-  .item{ padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:grid; gap:4px }
-  .item:last-child{ border-bottom:0 }
-  .item:hover{ background:rgba(37,99,235,.08) }
-  .item.active{ outline:2px solid var(--accent); outline-offset:-2px; background:rgba(37,99,235,.12) }
-  .nm{ font-weight:700 }
-  .sub{ color:var(--muted); font-size:.92rem; display:flex; gap:6px; flex-wrap:wrap }
-  .badge{ display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c }
-  .dist{ color:#9ca3af }
+  .side{background:var(--panel);border:1px solid var(--border);border-radius:14px;margin:12px;padding:12px;display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 24px)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .title{font-weight:800;display:flex;gap:8px;align-items:center}
+  .muted{color:var(--muted)}
+  .btn{border:0;border-radius:10px;padding:8px 12px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,var(--accent),var(--accent2));color:#fff}
+  .btn.ghost{background:transparent;color:#c7d2fe;border:1px solid var(--border)}
+  .chipbar{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--chip);border:1px solid var(--border);color:#c7d2fe;padding:8px 12px;border-radius:999px;cursor:pointer;user-select:none;font-weight:700;font-size:.92rem}
+  .chip.active{background:var(--chipOn);color:#fff;border-color:transparent}
+  .list{overflow:auto;border:1px solid var(--border);border-radius:12px;flex:1;min-height:140px}
+  .item{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;display:grid;gap:4px}
+  .item:last-child{border-bottom:0}
+  .item:hover{background:rgba(37,99,235,.08)}
+  .item.active{outline:2px solid var(--accent);outline-offset:-2px;background:rgba(37,99,235,.12)}
+  .nm{font-weight:700}
+  .sub{color:var(--muted);font-size:.92rem;display:flex;gap:6px;flex-wrap:wrap}
+  .badge{display:inline-block;font-size:.78rem;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:#12203c}
+  .dist{color:#9ca3af}
 
-  .mapwrap{ position:relative; }
-  #map{ position:absolute; inset:0 }
+  .mapwrap{position:relative}
+  #map{position:absolute;inset:0}
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:40;background:#111827;color:#fff;border:1px solid #374151;padding:10px 12px;border-radius:10px;display:none}
 
-  /* 팝업 (카카오 느낌) */
-  .ol-popup{
-    position:absolute;background:#fff;color:#111827;border-radius:8px;border:1px solid #e5e7eb;
-    min-width:230px; padding:10px 12px; transform:translate(-50%,-110%);
-    box-shadow:0 10px 20px rgba(0,0,0,.25); pointer-events:auto;
-  }
-  .ol-popup:after{
-    content:""; position:absolute; left:50%; transform:translateX(-50%);
-    bottom:-10px; width:0; height:0; border:10px solid transparent; border-top-color:#fff;
-    filter: drop-shadow(0 -1px 0 #e5e7eb);
-  }
+  .ol-popup{position:absolute;background:#fff;color:#111827;border-radius:8px;border:1px solid #e5e7eb;min-width:230px;padding:10px 12px;transform:translate(-50%,-110%);box-shadow:0 10px 20px rgba(0,0,0,.25);pointer-events:auto}
+  .ol-popup:after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-10px;width:0;height:0;border:10px solid transparent;border-top-color:#fff;filter:drop-shadow(0 -1px 0 #e5e7eb)}
   .ol-popup .tit{font-weight:800;margin-right:26px}
   .ol-popup .sub2{color:#4b5563;font-size:.9rem}
   .ol-popup .x{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#6b7280;font-size:18px;cursor:pointer;line-height:1}
 </style>
 </head>
 <body>
-  <!-- 상태 로그 배너 -->
-  <div class="status" id="status">상태: <b id="smsg">OSM로 초기화 준비… (VWorld 502 감지)</b></div>
+  <div class="status">상태: <b id="smsg">OSM로 초기화 중… (브이월드 완전 비활성)</b></div>
 
   <div class="layout">
     <aside class="side">
@@ -96,7 +72,6 @@
       <div class="row">
         <button class="btn" id="locBtn">현재 위치</button>
         <button class="btn ghost" id="fitBtn">전체 보기</button>
-        <button class="btn ghost" id="reloadAdminBtn">행정경계 갱신</button>
       </div>
 
       <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
@@ -117,55 +92,45 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* ===== 네트워크 상황에 맞춘 토글 =====
-   - VWorld 502 → 아래 둘 다 false 권장
-   - 나중에 정상화되면 true로 바꾸면 됩니다.
-*/
-const ENABLE_VWORLD         = false; // 브이월드 스크립트 로드/사용 (지도 엔진)
-const ENABLE_VWORLD_APIS    = false; // 브이월드 검색/행정경계 API 사용
-
-/* ===== 환경 설정 ===== */
-const VWORLD_KEY    = "CF9A371B-35A6-3822-8315-6592C8342E82";
-const VWORLD_DOMAIN = "psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev";
-const FALLBACK_CENTER = { lng:128.1136, lat:36.1398 }; // 김천
-const RADIUS_M = 3000;
+/* ========== 전역/설정 (VWorld 완전 제거) ========== */
+const FALLBACK_CENTER = { lng:128.1136, lat:36.1398 }; // 김천(교통안전공단 인근)
+const RADIUS_M = 3000; // 3km
 const $ = (s)=>document.querySelector(s);
-const smsg = $('#smsg'), countEl = $('#count'), selEl = $('#sel'), toast = $('#toast');
+const smsg=$('#smsg'), countEl=$('#count'), selEl=$('#sel'), toast=$('#toast');
 
 let ORIGIN = { ...FALLBACK_CENTER };
 let currentType = ""; // '', '노상','노외','부설'
 let LIVE = [], DEMO = [], VIEW = [];
-let usingVWorld = false; // 강제 OSM
 
-/* ===== 로그 ===== */
+let olmap, vectorSrc, clusterSrc, clusterLayer, meLayer, radiusLayer, overlay, popupEl;
+let openFeatureId = null;
+
+/* ========== 유틸 ========== */
 function logOk(msg){ smsg.innerHTML = `<span class="ok">✔</span> ${msg}`; }
 function logInfo(msg){ smsg.textContent = msg; }
 function showToast(msg, ms=2000){ toast.textContent=msg; toast.style.display='block'; clearTimeout(showToast._t); showToast._t=setTimeout(()=>toast.style.display='none',ms); }
 
-/* ===== 지도 ===== */
-let olmap, vectorSrc, clusterSrc, clusterLayer, meLayer, radiusLayer, adminLayer, overlay, popupEl;
-let openFeatureId = null;
+function km(a,b){ const R=6371,toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng); const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2); const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2; return 2*R*Math.asin(Math.sqrt(t)); }
+function inferType(name="",category="",addr=""){ if(/노상/.test(name)||/노상/.test(category)) return "노상"; if(/노외|공영|타워|주차타워/.test(name)||/노외|공영|타워/.test(category)) return "노외"; if(/부설|몰|백화점|병원|학교|아파트/.test(name+addr)) return "부설"; return "노외"; }
 
+/* ========== 지도 초기화 (OSM 전용) ========== */
 function initMap(){
-  // OSM 고정 (VWorld 스크립트 미사용)
   const fromLonLat = ol.proj.fromLonLat;
   olmap = new ol.Map({
     target:'map',
     layers:[ new ol.layer.Tile({ source:new ol.source.OSM() }) ],
     view:new ol.View({ center: fromLonLat([ORIGIN.lng, ORIGIN.lat]), zoom: 14 })
   });
-  logOk('지도 엔진: OSM(폴백)');
+  logOk('지도 엔진: OSM');
 
   vectorSrc   = new ol.source.Vector({ features: [] });
   clusterSrc  = new ol.source.Cluster({ distance: 40, minDistance: 10, source: vectorSrc });
 
-  clusterLayer= new ol.layer.Vector({ source: clusterSrc, style: clusterStyle });
-  meLayer     = new ol.layer.Vector({ source: new ol.source.Vector() });
-  radiusLayer = new ol.layer.Vector({ source: new ol.source.Vector() });
-  adminLayer  = new ol.layer.Vector({ source: new ol.source.Vector() });
+  clusterLayer= new ol.layer.Vector({ source: clusterSrc, style: clusterStyle }); clusterLayer.setZIndex(100);
+  meLayer     = new ol.layer.Vector({ source: new ol.source.Vector() });          meLayer.setZIndex(90);
+  radiusLayer = new ol.layer.Vector({ source: new ol.source.Vector() });          radiusLayer.setZIndex(20);
 
-  adminLayer.setZIndex(10); radiusLayer.setZIndex(20); meLayer.setZIndex(90); clusterLayer.setZIndex(100);
-  olmap.addLayer(adminLayer); olmap.addLayer(radiusLayer); olmap.addLayer(meLayer); olmap.addLayer(clusterLayer);
+  olmap.addLayer(radiusLayer); olmap.addLayer(meLayer); olmap.addLayer(clusterLayer);
 
   // 팝업
   popupEl = document.createElement('div');
@@ -175,17 +140,15 @@ function initMap(){
   olmap.addOverlay(overlay);
   popupEl.querySelector('.x').addEventListener('click', closePopup);
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
-
-  // 마커 클릭 토글
   olmap.on('singleclick', (evt)=>{
     let hit=false;
     olmap.forEachFeatureAtPixel(evt.pixel,(feature, layer)=>{
       if(layer!==clusterLayer) return;
       const members = feature.get('features')||[];
       if(members.length>1){
-        const extent = ol.extent.createEmpty();
-        members.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
-        olmap.getView().fit(extent, { duration:250, maxZoom:17, padding:[40,20,40,380] });
+        const ex = ol.extent.createEmpty();
+        members.forEach(f => ol.extent.extend(ex, f.getGeometry().getExtent()));
+        olmap.getView().fit(ex, { duration:250, maxZoom:17, padding:[40,20,40,380] });
       }else if(members.length===1){
         togglePopupForFeature(members[0], evt.coordinate);
       }
@@ -213,7 +176,11 @@ function togglePopupForFeature(f, coord){
   highlightListItem(p.nm);
 }
 
-const PARK_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
+const PARK_ICON_SVG = `
+<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
+  <circle cx='18' cy='18' r='16' fill='#2563eb'/>
+  <text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text>
+</svg>`;
 function clusterStyle(feature){
   const size=(feature.get('features')||[]).length;
   if(size>1){
@@ -227,11 +194,8 @@ function clusterStyle(feature){
   });
 }
 
-/* ===== 데이터 (VWorld API 비활성화 시 데모로 커버) ===== */
-function km(a,b){ const R=6371,toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng); const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2); const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2; return 2*R*Math.asin(Math.sqrt(t)); }
-function inferType(name="",category="",addr=""){ if(/노상/.test(name)||/노상/.test(category)) return "노상"; if(/노외|공영|타워|주차타워/.test(name)||/노외|공영|타워/.test(category)) return "노외"; if(/부설|몰|백화점|병원|학교|아파트/.test(name+addr)) return "부설"; return "노외"; }
-
-function generateDemo(n=50){
+/* ========== 데이터 (데모로 표시) ========== */
+function generateDemo(n=60){
   const out=[];
   for(let i=0;i<n;i++){
     const r=(Math.random()*2.6+0.2); const ang=Math.random()*Math.PI*2;
@@ -242,13 +206,9 @@ function generateDemo(n=50){
   }
   return out;
 }
+function loadLive(){ LIVE=[]; recompute(); } // 외부 API 호출 없음
 
-async function loadLive(){  // VWorld API 사용 안 함(502)
-  LIVE = []; // 필요 시 다른 오픈 POI 소스 연동 가능
-  recompute();
-}
-
-/* ===== 리스트/마커 ===== */
+/* ========== 리스트/마커 ========== */
 function buildList(rows){
   const list = $('#list');
   if(rows.length===0){
@@ -296,7 +256,7 @@ function recompute(){
   VIEW=rows; buildList(rows); rebuildMarkers(rows);
 }
 
-/* ===== 현재 위치 & 반경 & 경계 ===== */
+/* ========== 현재 위치 & 반경 ========== */
 function drawOrigin(lng,lat){
   const PERSON_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const c=ol.proj.transform([lng,lat],'EPSG:4326','EPSG:3857');
@@ -310,10 +270,9 @@ function drawOrigin(lng,lat){
   radiusLayer.getSource().clear(); radiusLayer.getSource().addFeature(feat);
 }
 function setOrigin(lng,lat,fly=true){
-  ORIGIN={lng,lat}; drawOrigin(lng,lat); DEMO = generateDemo(50);
+  ORIGIN={lng,lat}; drawOrigin(lng,lat); DEMO = generateDemo(60);
   if(fly){ const c=ol.proj.transform([lng,lat],'EPSG:4326','EPSG:3857'); olmap.getView().setCenter(c); olmap.getView().setZoom(15); }
   closePopup(); recompute();
-  if(ENABLE_VWORLD_APIS) loadAdminBoundaries(); // 행정경계는 VWorld API 필요
 }
 async function autoLocate(){
   const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
@@ -323,26 +282,7 @@ async function autoLocate(){
   navigator.geolocation.getCurrentPosition(pos=>{ if(fixed) return; fixed=true; navigator.geolocation.clearWatch(wid); setOrigin(pos.coords.longitude,pos.coords.latitude,true); }, ()=>{}, opts);
 }
 
-/* ===== 행정경계(VWorld WFS) : 502 시 비활성 ===== */
-async function fetchWFS(typename, bbox4326){
-  try{
-    const url=`https://api.vworld.kr/req/wfs?service=WFS&request=GetFeature&version=1.0.0`
-             + `&typename=${typename}&outputFormat=application/json&srsName=EPSG:4326`
-             + `&bbox=${bbox4326.join(',')},EPSG:4326&key=${VWORLD_KEY}&domain=${VWORLD_DOMAIN}`;
-    const res = await fetch(url); if(!res.ok) throw 0; return await res.json();
-  }catch(_){ return null; }
-}
-function degBoxAround(lng, lat, kmRadius){ const dLat=kmRadius/111; const dLng=kmRadius/(111*Math.cos(lat*Math.PI/180)); return [lng-dLng, lat-dLat, lng+dLng, lat+dLat]; }
-async function loadAdminBoundaries(){
-  if(!ENABLE_VWORLD_APIS) return; // 502 대응: 아예 호출 안 함
-  const bbox = degBoxAround(ORIGIN.lng, ORIGIN.lat, 12);
-  const [sido, sigg] = await Promise.all([ fetchWFS('lt_c_adsido',bbox), fetchWFS('lt_c_adsigg',bbox) ]);
-  const fmt = new ol.format.GeoJSON(); const src = adminLayer.getSource(); src.clear();
-  const add=(geojson,color)=>{ if(!geojson) return; const feats=fmt.readFeatures(geojson,{dataProjection:'EPSG:4326',featureProjection:'EPSG:3857'}); feats.forEach(f=>f.setStyle(new ol.style.Style({stroke:new ol.style.Stroke({color,width:2.2}),fill:null}))); src.addFeatures(feats); };
-  add(sido,'rgba(239,68,68,0.95)'); add(sigg,'rgba(239,68,68,0.95)');
-}
-
-/* 타입 칩 */
+/* ========== 타입 칩 ========== */
 function initTypeBar(){
   const bar=$('#typeBar');
   bar.addEventListener('click',e=>{
@@ -352,17 +292,15 @@ function initTypeBar(){
   });
 }
 
-/* 부트스트랩 */
+/* ========== 부트스트랩 ========== */
 function bootstrap(){
-  initMap();                         // OSM 즉시
-  setOrigin(ORIGIN.lng, ORIGIN.lat); // 김천 기본점 + 데모
+  initMap();
+  setOrigin(ORIGIN.lng, ORIGIN.lat); // 김천 기본점 + 데모 데이터 생성
   initTypeBar();
-  if(ENABLE_VWORLD_APIS) loadAdminBoundaries();
-  autoLocate();                      // 가능하면 현재위치로 재중심
-  loadLive();                        // VWorld API 미사용 → 빈값(데모로 커버)
+  autoLocate();                      // 가능 시 현재 위치로 재중심
+  loadLive();                        // 외부 호출 없음
   showToast('OSM 지도를 불러왔습니다');
 }
-
 document.getElementById('locBtn').addEventListener('click', autoLocate);
 document.getElementById('fitBtn').addEventListener('click', ()=>{
   const extent = ol.extent.createEmpty();
@@ -370,9 +308,10 @@ document.getElementById('fitBtn').addEventListener('click', ()=>{
   vectorSrc?.getFeatures()?.forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
   if(!ol.extent.isEmpty(extent)){ olmap.getView().fit(extent, {duration:400, padding:[40,20,40,380], maxZoom:16}); }
 });
-document.getElementById('reloadAdminBtn').addEventListener('click', loadAdminBoundaries);
-
 document.addEventListener('DOMContentLoaded', bootstrap);
+
+/* 안전장치: 외부로부터 들어오는 미처리 Promise 에러를 조용히 기록 */
+window.addEventListener('unhandledrejection', e=>{ console.warn('Unhandled promise', e.reason); });
 </script>
 </body>
 </html>
