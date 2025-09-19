@@ -177,7 +177,7 @@
   const DOMAIN = 'kingnes11.github.io';                    // 콘솔 등록 도메인
   const INIT   = { lng:128.1136, lat:36.1398 };            // 김천(교통안전공단)
   const DEMO_N = 1000;                                     // 더미 개수
-  const RADIUS_KM = 5.0;                                   // 반경
+  const RADIUS_KM = 5.0;                                   // 반경 (km)
   document.getElementById('radiusLabel').textContent = RADIUS_KM;
 
   const $ = (s)=>document.querySelector(s);
@@ -218,7 +218,9 @@
     /* ---- 브이월드 WMTS(Base) + OSM 폴백 ---- */
     const vwBase = new ol.layer.Tile({
       source: new ol.source.XYZ({
-        url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`
+        url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
+        maxZoom: 18,     // ★ 브이월드 Base 최대 줌
+        minZoom: 5
       }),
       zIndex: 0, visible: true
     });
@@ -227,7 +229,12 @@
     const map = new ol.Map({
       target:'map',
       layers:[ vwBase, osm ],
-      view: new ol.View({ center: ol.proj.fromLonLat([INIT.lng, INIT.lat]), zoom: 15 })
+      view: new ol.View({
+        center: ol.proj.fromLonLat([INIT.lng, INIT.lat]),
+        zoom: 15,
+        maxZoom: 18,    // ★ 뷰도 상한 고정 (z=19~20 요청 방지)
+        minZoom: 5
+      })
     });
 
     // 타일 에러 → OSM 전환 + 로그
@@ -325,7 +332,7 @@
         const members = feature.get('features')||[];
         if(members.length>1){
           const ex=ol.extent.createEmpty(); members.forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
-          map.getView().fit(ex,{duration:250,maxZoom:17,padding:[30,380,30,30]});
+          map.getView().fit(ex,{duration:250,maxZoom:17,padding:[30,380,30,30]}); // ★ fit 시에도 17로 제한
         }else if(members.length===1){
           const f=members[0], coord=f.getGeometry().getCoordinates();
           openPopupForFeature(f, coord);
@@ -428,7 +435,7 @@
       const ex=ol.extent.createEmpty();
       meSrc.getFeatures().forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
       rawSrc.getFeatures().forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
-      if(!ol.extent.isEmpty(ex)) map.getView().fit(ex,{duration:400, padding:[30,380,30,30], maxZoom:16});
+      if(!ol.extent.isEmpty(ex)) map.getView().fit(ex,{duration:400, padding:[30,380,30,30], maxZoom:17}); // ★ fit 상한 17
     }
     $('#locBtn').addEventListener('click', ()=> autoLocate(true));
     $('#fitBtn').addEventListener('click', fitAll);
@@ -465,11 +472,10 @@
     const msg = 'OpenLayers 10.6.1 로딩 실패 (로컬+CDN 모두 실패)';
     console.error(msg, err); warn(msg);
     const detail = (err && (err.stack||err.message)) || String(err);
-    const body = `origin=${location.origin}\npath=${location.pathname}\nua=${navigator.userAgent}\nerr=${detail}`;
     const dock=document.getElementById('errdock'); dock.classList.add('open');
     const bodyEl=document.getElementById('errbody');
     const div=document.createElement('div'); div.className='logrow';
-    div.innerHTML = `<span class="time">[${new Date().toLocaleTimeString()}]</span><span class="lvl lvl-ERR">ERR</span><span>${msg}</span><div class="muted" style="white-space:pre-wrap">${body}</div>`;
+    div.innerHTML = `<span class="time">[${new Date().toLocaleTimeString()}]</span><span class="lvl lvl-ERR">ERR</span><span>${msg}</span><div class="muted" style="white-space:pre-wrap">origin=${location.origin}\npath=${location.pathname}\nua=${navigator.userAgent}\nerr=${detail}</div>`;
     bodyEl.appendChild(div);
     document.getElementById('errcount').textContent='1건';
   });
