@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>주차장 지도 · 현재위치 중심 · 좌측 리스트 · 반경 3km · 행정경계</title>
+<title>주차장 지도 · 현재위치 자동 · 반경 3km · 행정경계</title>
 
-<!-- VWorld 2D API (도메인 등록 必: 제공하신 키/도메인 사용) -->
+<!-- VWorld 2D API (제공하신 키/도메인 그대로 사용) -->
 <script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
 
 <style>
@@ -55,7 +55,6 @@
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:40;background:#111827;color:#fff;border:1px solid #374151;padding:10px 12px;border-radius:10px;display:none}
 
-  /* 팝업 */
   .ol-popup{position:absolute;background:#111827;color:#e5e7eb;padding:8px 10px;border:1px solid #374151;border-radius:10px;
     min-width:200px;transform:translate(-50%,-110%);pointer-events:none}
   .ol-popup .tit{font-weight:700}
@@ -64,7 +63,6 @@
 </head>
 <body>
   <div class="layout">
-    <!-- 좌측 패널 -->
     <aside class="side">
       <div class="row title">
         <div>주차장(반경 <b>3km</b>)</div>
@@ -87,7 +85,6 @@
       <div id="list" class="list" role="listbox" aria-label="주차장 목록"></div>
     </aside>
 
-    <!-- 지도 -->
     <main class="mapwrap">
       <div id="map" aria-label="브이월드 2D 지도"></div>
     </main>
@@ -97,18 +94,23 @@
 
 <script>
 /* =========================
-   0) 상수/유틸 (전역)
+   0) 상수/전역
    ========================= */
 const VWORLD_KEY    = "CF9A371B-35A6-3822-8315-6592C8342E82";
 const VWORLD_DOMAIN = "psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev";
 
-const FALLBACK_CENTER = { lng:128.1136, lat:36.1398 }; // 실패 시 김천시청 근처
-const RADIUS_M = 3000;  // ★ 3km
+const FALLBACK_CENTER = { lng:128.1136, lat:36.1398 }; // 김천 기본점
+const RADIUS_M = 3000; // 3km
 const $ = (s)=>document.querySelector(s);
 const countEl = $('#count'), selEl = $('#sel'), toast = $('#toast');
 
-let ORIGIN = { ...FALLBACK_CENTER }; // 현재 원점(먼저 현재 위치 시도)
-let currentType = "";                 // '', '노상','노외','부설'
+let ORIGIN = { ...FALLBACK_CENTER };
+let currentType = ""; // '', '노상','노외','부설'
+
+// 데이터 풀을 LIVE(실검색)과 DEMO(테스트)로 분리
+let LIVE = [];
+let DEMO = [];
+let VIEW = [];
 
 function showToast(msg, ms=2000){
   toast.textContent = msg; toast.style.display='block';
@@ -124,7 +126,7 @@ function km(a,b){
 function degBoxAround(lng, lat, kmRadius){
   const dLat = kmRadius/111;
   const dLng = kmRadius/(111*Math.cos(lat*Math.PI/180));
-  return [lng-dLng, lat-dLat, lng+dLng, lat+dLng];
+  return [lng-dLng, lat-dLat, lng+dLng, lat+dLat];
 }
 function inferType(name="", category="", addr=""){
   if(/노상/.test(name)||/노상/.test(category)) return "노상";
@@ -164,7 +166,7 @@ function initMap(){
 
   const realMap = (vmap.addLayer ? vmap : (vmap.getMap? vmap.getMap():vmap.map));
   realMap.addLayer(clusterLayer);
-  realMap.addLayer(adminLayer);  // 위로 올리기
+  realMap.addLayer(adminLayer);  // bring to top
   realMap.removeLayer(adminLayer); realMap.addLayer(adminLayer);
   realMap.addLayer(radiusLayer);
   realMap.addLayer(meLayer);
@@ -229,11 +231,8 @@ function clusterStyle(feature){
 }
 
 /* =========================
-   2) 데이터 로드 + 테스트 데이터 보강 + 반경 필터
+   2) 실데이터 + 데모데이터 처리
    ========================= */
-let RAW = [];  // 원본(검색 + 데모)
-let VIEW = []; // 반경/타입 적용 후 화면 표시
-
 async function vworldPlaceSearch(query, page=1, size=100){
   const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0`
             + `&format=json&errorformat=json&crs=EPSG:4326&type=place`
@@ -247,12 +246,11 @@ async function vworldPlaceSearch(query, page=1, size=100){
   return [];
 }
 
-/* 현재 ORIGIN 기준으로 ‘반드시’ 보이는 데모 n개 생성 */
-function seedDemoAroundOrigin(n=50){
+/* 현재 ORIGIN 기준으로 ‘반드시’ 보이는 데모 n개 생성 (3km 내) */
+function generateDemo(n=50){
   const out=[];
   for(let i=0;i<n;i++){
-    // 0.2km ~ 2.8km 사이 무작위 → 3km 필터에 확실히 포함
-    const r = (Math.random()*2.6 + 0.2); // km
+    const r = (Math.random()*2.6 + 0.2); // 0.2~2.8 km
     const ang = Math.random()*Math.PI*2;
     const dLat = (r/111)*Math.sin(ang);
     const dLng = (r/(111*Math.cos(ORIGIN.lat*Math.PI/180)))*Math.cos(ang);
@@ -260,7 +258,7 @@ function seedDemoAroundOrigin(n=50){
     const types = ['노상','노외','부설'];
     const t = types[i%3];
     out.push({
-      id:`DEMO-${Date.now()}-${i}`,
+      id:`DEMO-${ORIGIN.lng.toFixed(4)}-${ORIGIN.lat.toFixed(4)}-${i}`,
       nm:`데모 ${t} 주차장 ${i+1}`,
       lng, lat,
       addr:`데모로 ${i+1} (반경 ${r.toFixed(1)}km)`,
@@ -270,10 +268,10 @@ function seedDemoAroundOrigin(n=50){
   return out;
 }
 
-async function loadParking(){
+/* LIVE 로드 (없어도 OK) */
+async function loadLive(){
   let rows = [];
   try{
-    // 현재 위치 반경 8km 박스 내부의 후보 검색
     const live = []
       .concat(await vworldPlaceSearch('김천시 주차장',1,100))
       .concat(await vworldPlaceSearch('김천 주차',1,100));
@@ -290,19 +288,16 @@ async function loadParking(){
       rows.push({ id:key, nm:title, lng, lat, addr:road, type:inferType(title,cat,road) });
     }
   }catch(e){
-    console.warn('검색 실패(무시하고 데모 사용):', e);
+    console.warn('검색 실패(무시):', e);
   }
-
-  // ★ 데모를 반드시 추가해 ‘보이는 데이터’를 확보
-  rows = rows.concat(seedDemoAroundOrigin(50));
-
-  RAW = rows;
+  LIVE = rows;
   recompute();
 }
 
-/* 현재 ORIGIN 기준 3km 내 + 타입 필터 */
+/* ORIGIN 기준 3km + 타입필터 적용 */
 function recompute(){
-  const within = RAW.map(r=>{
+  const ALL = LIVE.concat(DEMO); // ★ 항상 DEMO 포함
+  const within = ALL.map(r=>{
     const dkm = km(ORIGIN, {lng:r.lng, lat:r.lat});
     return { ...r, distKm: dkm };
   }).filter(r => r.distKm*1000 <= RADIUS_M);
@@ -314,6 +309,8 @@ function recompute(){
   VIEW = rows;
   buildList(rows);
   rebuildMarkers(rows);
+
+  console.log(`RECOMPUTE -> LIVE:${LIVE.length}, DEMO:${DEMO.length}, VIEW:${VIEW.length}`);
 }
 
 /* =========================
@@ -380,7 +377,6 @@ function rebuildMarkers(rows){
    5) 현재 위치 & 3km 원
    ========================= */
 function drawOrigin(lng, lat){
-  // 사람 아이콘
   const PERSON_ICON_SVG = `
   <svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'>
     <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
@@ -399,7 +395,6 @@ function drawOrigin(lng, lat){
   }));
   meLayer.getSource().clear(); meLayer.getSource().addFeature(me);
 
-  // 3km 원
   const circle = new ol.geom.Circle(c, RADIUS_M);
   const feat = new ol.Feature(circle);
   feat.setStyle(new ol.style.Style({
@@ -409,9 +404,12 @@ function drawOrigin(lng, lat){
   radiusLayer.getSource().clear(); radiusLayer.getSource().addFeature(feat);
 }
 
+/* ORIGIN 설정 시: DEMO를 ‘그 위치 기준’으로 재생성하여 항상 보이게 */
 function setOrigin(lng, lat, fly=true){
   ORIGIN = {lng, lat};
   drawOrigin(lng, lat);
+  // ★ 중심 바뀔 때마다 데모 재생성 → 항상 반경 3km 내에 충분한 포인트 보장
+  DEMO = generateDemo(50);
   if(fly){
     const c = ol.proj.transform([lng,lat],'EPSG:4326','EPSG:3857');
     vmap.getView().setCenter(c); vmap.getView().setZoom(15);
@@ -420,13 +418,11 @@ function setOrigin(lng, lat, fly=true){
   loadAdminBoundaries(); // 경계 갱신
 }
 
-/* geolocation을 Promise로 래핑해서 ‘현재 위치 먼저’ 잡기 */
+/* 지오로케이션: 자동 시도 (HTTPS/localhost 필수) */
 function getMyLocationOnce(timeoutMs=7000){
   return new Promise((resolve)=>{
     const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-    if(!secureOK || !navigator.geolocation){
-      resolve(null); return;
-    }
+    if(!secureOK || !navigator.geolocation){ resolve(null); return; }
     let settled = false;
     const t = setTimeout(()=>{ if(!settled){ settled=true; resolve(null); } }, timeoutMs);
     navigator.geolocation.getCurrentPosition(
@@ -452,7 +448,7 @@ async function fetchWFS(typename, bbox4326){
 }
 async function loadAdminBoundaries(){
   try{
-    const bbox = degBoxAround(ORIGIN.lng, ORIGIN.lat, 12); // 12km 박스
+    const bbox = degBoxAround(ORIGIN.lng, ORIGIN.lat, 12);
     const T_SIDO = 'lt_c_adsido';
     const T_SIGG = 'lt_c_adsigg';
 
@@ -485,7 +481,7 @@ async function loadAdminBoundaries(){
 }
 
 /* =========================
-   7) 타입 칩 동작
+   7) 타입 칩
    ========================= */
 function initTypeBar(){
   const bar = $('#typeBar');
@@ -499,27 +495,24 @@ function initTypeBar(){
 }
 
 /* =========================
-   8) 시작
+   8) 시작 (현재 위치 자동 설정)
    ========================= */
 async function start(){
   initMap();
   initTypeBar();
 
-  // ★ 현재 위치를 먼저 획득 (실패 시 FALLBACK_CENTER)
+  // ★ 1) 현재 위치 자동 시도 → 실패 시 김천 FALLBACK
   const my = await getMyLocationOnce(7000);
   if(my){ setOrigin(my.lng, my.lat, true); }
   else  { setOrigin(FALLBACK_CENTER.lng, FALLBACK_CENTER.lat, true); }
 
-  // ★ 현재 원점 기준으로 데이터 로드 (실패해도 데모 50개 보장)
-  await loadParking();
+  // ★ 2) LIVE 로드(있으면 추가 표시)
+  loadLive(); // 비동기 로드, DEMO는 이미 보장되어 즉시 보임
 
-  // ★ 행정경계
-  await loadAdminBoundaries();
-
-  showToast('좌측 목록에서 주차장을 선택하세요');
+  showToast('주변 주차장을 불러왔습니다');
 }
 
-/* 좌측 버튼 */
+/* 보조 버튼 */
 document.getElementById('locBtn').addEventListener('click', async ()=>{
   const my = await getMyLocationOnce(7000);
   if(my){ setOrigin(my.lng, my.lat, true); }
@@ -535,7 +528,7 @@ document.getElementById('fitBtn').addEventListener('click', ()=>{
 });
 document.getElementById('reloadAdminBtn').addEventListener('click', loadAdminBoundaries);
 
-start();
+window.addEventListener('load', start);
 </script>
 </body>
 </html>
