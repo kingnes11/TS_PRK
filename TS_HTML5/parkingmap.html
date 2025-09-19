@@ -1,556 +1,286 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>주차장 지도 · 로드 즉시 표시 · 현재위치 자동 · 반경 3km</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>로그인</title>
+  <meta name="description" content="반응형 로그인 화면" />
+  <style>
+    :root{
+      --bg: #f6f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-strong: #1d4ed8;
+      --ring: rgba(37, 99, 235, .35);
+      --error: #dc2626;
+      --border: #e5e7eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root{
+        --bg: #0b1220;
+        --card: #0f172a;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --primary: #3b82f6;
+        --primary-strong: #2563eb;
+        --ring: rgba(59, 130, 246, .35);
+        --error: #f87171;
+        --border: #1f2a44;
+      }
+    }
 
-<!-- VWorld 2D API (도메인 등록 必: 제공값 사용) -->
-<script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple SD Gothic Neo, "Noto Sans KR", sans-serif;
+      background:
+        radial-gradient(60vmax 60vmax at 10% 10%, rgba(99,102,241,.08), transparent 60%),
+        radial-gradient(50vmax 50vmax at 90% 20%, rgba(59,130,246,.08), transparent 60%),
+        var(--bg);
+      color:var(--text);
+      display:grid;
+      place-items:center;
+      padding:24px;
+    }
 
-<style>
-  :root{
-    --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
-    --accent:#2563eb; --accent2:#1d4ed8; --border:#20304f; --chip:#1f2a44; --chipOn:#243a7a;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
+    .card{
+      width:100%;
+      max-width: 420px;
+      background: var(--card);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:24px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.06);
+      backdrop-filter: blur(4px);
+      animation: floatIn .4s ease-out;
+    }
+    @keyframes floatIn{
+      from{transform: translateY(8px); opacity:0}
+      to{transform: translateY(0); opacity:1}
+    }
 
-  .layout{display:grid; grid-template-columns: 360px 1fr; height:100vh}
-  @media (max-width: 960px){
-    .layout{ grid-template-columns: 1fr }
-    .side{ position:fixed; z-index:30; left:12px; right:12px; top:12px }
-    .mapwrap{ height:100vh }
-  }
-  .side{
-    background:var(--panel); border:1px solid var(--border); border-radius:14px; margin:12px; padding:12px;
-    display:flex; flex-direction:column; gap:10px; max-height: calc(100vh - 24px);
-  }
-  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
-  .title{ font-weight:800; display:flex; gap:8px; align-items:center; }
-  .muted{ color:var(--muted) }
-  .btn{ border:0; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer;
-    background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#fff }
-  .btn.ghost{ background:transparent; color:#c7d2fe; border:1px solid var(--border) }
-  .chipbar{ display:flex; gap:8px; flex-wrap:wrap }
-  .chip{
-    background:var(--chip); border:1px solid var(--border); color:#c7d2fe;
-    padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem;
-  }
-  .chip.active{ background:var(--chipOn); color:#fff; border-color:transparent }
-  .list{ overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 140px }
-  .item{ padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:grid; gap:4px }
-  .item:last-child{ border-bottom:0 }
-  .item:hover{ background:rgba(37,99,235,.08) }
-  .item.active{ outline:2px solid var(--accent); outline-offset:-2px; background:rgba(37,99,235,.12) }
-  .nm{ font-weight:700 }
-  .sub{ color:var(--muted); font-size:.92rem; display:flex; gap:6px; flex-wrap:wrap }
-  .badge{ display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c }
-  .dist{ color:#9ca3af }
+    .header{
+      display:flex; align-items:center; gap:12px; margin-bottom:20px;
+    }
+    .logo{
+      width:40px; height:40px; border-radius:10px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+      display:grid; place-items:center; color:white; font-weight:700;
+      letter-spacing:.5px;
+    }
+    h1{font-size:1.25rem; margin:0}
+    .sub{color:var(--muted); font-size:.9rem; margin:4px 0 0}
 
-  .mapwrap{ position:relative; }
-  #map{ position:absolute; inset:0 }
+    form{display:grid; gap:14px}
+    .field{display:grid; gap:8px}
+    label{font-size:.9rem}
+    .control{
+      display:flex; align-items:center; gap:8px;
+      border:1px solid var(--border);
+      border-radius:12px; padding:12px 14px;
+      background:transparent;
+    }
+    .control:focus-within{
+      outline: 3px solid var(--ring);
+      outline-offset: 1px;
+    }
+    .control input{
+      width:100%; border:0; outline:0; background:transparent; color:var(--text);
+      font-size:1rem;
+    }
+    .toggle-btn{
+      border:0; background:transparent; cursor:pointer; color:var(--muted);
+      font-size:.9rem;
+    }
 
-  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:40;background:#111827;color:#fff;border:1px solid #374151;padding:10px 12px;border-radius:10px;display:none}
+    .row{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; flex-wrap:wrap;
+    }
+    .checkbox{
+      display:flex; align-items:center; gap:8px; color:var(--muted); font-size:.9rem;
+      user-select:none;
+    }
+    .link{
+      color:var(--primary); text-decoration:none; font-size:.9rem;
+    }
+    .link:focus, .link:hover{ text-decoration:underline; }
 
-  /* 팝업 (닫기 버튼 포함) */
-  .ol-popup{position:absolute;background:#111827;color:#e5e7eb;padding:10px 12px;border:1px solid #374151;border-radius:10px;
-    min-width:220px;transform:translate(-50%,-110%);pointer-events:auto}
-  .ol-popup .tit{font-weight:700;margin-right:26px}
-  .ol-popup .sub2{color:#9ca3af;font-size:.9rem}
-  .ol-popup .x{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#e5e7eb;font-size:18px;cursor:pointer;line-height:1}
-</style>
+    .btn{
+      appearance:none; border:0; cursor:pointer;
+      border-radius:12px; padding:12px 16px; width:100%;
+      background: linear-gradient(180deg, var(--primary), var(--primary-strong));
+      color:white; font-weight:600; font-size:1rem;
+      transition: transform .05s ease, filter .2s ease;
+    }
+    .btn:active{ transform: translateY(1px) scale(.995); }
+    .btn[disabled]{ opacity:.6; cursor:progress; }
+
+    .or{
+      display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; color:var(--muted); font-size:.85rem;
+    }
+    .or::before, .or::after{
+      content:""; height:1px; background:var(--border);
+    }
+
+    .social{
+      display:grid; gap:10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    .sbtn{
+      border:1px solid var(--border); border-radius:12px;
+      padding:10px 12px; background:transparent; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      font-weight:600;
+    }
+    .sbtn:focus{ outline: 3px solid var(--ring); }
+
+    .foot{
+      text-align:center; margin-top:10px; color:var(--muted); font-size:.85rem;
+    }
+
+    .error{
+      color: var(--error); font-size:.9rem; min-height:1.2em;
+    }
+
+    @media (min-width: 768px){
+      .card{ padding:28px; max-width: 460px; }
+      h1{font-size:1.35rem}
+    }
+  </style>
 </head>
 <body>
-  <div class="layout">
-    <aside class="side">
-      <div class="row title">
-        <div>주차장(반경 <b>3km</b>)</div>
-        <div class="muted" style="margin-left:auto">총 <b id="count">0</b>곳 · 선택: <b id="sel">-</b></div>
+  <main class="card" role="main" aria-labelledby="title">
+    <div class="header">
+      <div class="logo" aria-hidden="true">LG</div>
+      <div>
+        <h1 id="title">로그인</h1>
+        <p class="sub">계정에 접속해 서비스를 이용하세요</p>
+      </div>
+    </div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="email">이메일</label>
+        <div class="control">
+          <input id="email" name="email" type="email" inputmode="email"
+                 autocomplete="username"
+                 placeholder="you@example.com" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">비밀번호</label>
+        <div class="control">
+          <input id="password" name="password" type="password"
+                 autocomplete="current-password"
+                 minlength="8" placeholder="••••••••" required />
+          <button class="toggle-btn" type="button" id="togglePw" aria-label="비밀번호 표시 전환">표시</button>
+        </div>
       </div>
 
       <div class="row">
-        <button class="btn" id="locBtn">현재 위치</button>
-        <button class="btn ghost" id="fitBtn">전체 보기</button>
-        <button class="btn ghost" id="reloadAdminBtn">행정경계 갱신</button>
+        <label class="checkbox">
+          <input type="checkbox" id="remember" name="remember" />
+          자동 로그인
+        </label>
+        <a class="link" href="#" onclick="alert('비밀번호 찾기 화면으로 이동하세요.'); return false;">비밀번호 찾기</a>
       </div>
 
-      <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
-        <div class="chip active" data-type="">전체</div>
-        <div class="chip" data-type="노상">노상</div>
-        <div class="chip" data-type="노외">노외</div>
-        <div class="chip" data-type="부설">부설</div>
+      <div id="errorBox" class="error" aria-live="polite"></div>
+
+      <button class="btn" id="submitBtn" type="submit">로그인</button>
+
+      <div class="or" aria-hidden="true">또는</div>
+
+      <div class="social">
+        <button type="button" class="sbtn" onclick="demoSignin('Google')">G로 계속</button>
+        <button type="button" class="sbtn" onclick="demoSignin('GitHub')">GitHub로 계속</button>
       </div>
 
-      <div id="list" class="list" role="listbox" aria-label="주차장 목록"></div>
-    </aside>
+      <p class="foot">
+        계정이 없으신가요? <a class="link" href="#" onclick="alert('회원가입 화면으로 이동하세요.'); return false;">회원가입</a>
+      </p>
+    </form>
+  </main>
 
-    <main class="mapwrap">
-      <div id="map" aria-label="브이월드 2D 지도"></div>
-    </main>
-  </div>
+  <script>
+    // 비밀번호 표시/숨기기
+    const pw = document.getElementById('password');
+    const togglePw = document.getElementById('togglePw');
+    togglePw.addEventListener('click', () => {
+      const isPw = pw.type === 'password';
+      pw.type = isPw ? 'text' : 'password';
+      togglePw.textContent = isPw ? '숨김' : '표시';
+      pw.focus();
+    });
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    const form = document.getElementById('loginForm');
+    const errorBox = document.getElementById('errorBox');
+    const submitBtn = document.getElementById('submitBtn');
 
-<script>
-/* =========================
-   0) 상수/전역
-   ========================= */
-const VWORLD_KEY    = "CF9A371B-35A6-3822-8315-6592C8342E82";
-const VWORLD_DOMAIN = "psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev";
+    // 간단한 클라이언트 검증 + 로딩 상태
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.textContent = '';
 
-const FALLBACK_CENTER = { lng:128.1136, lat:36.1398 }; // 김천 기본점
-const RADIUS_M = 3000; // 3km
-const $ = (s)=>document.querySelector(s);
-const countEl = $('#count'), selEl = $('#sel'), toast = $('#toast');
-
-let ORIGIN = { ...FALLBACK_CENTER };
-let currentType = ""; // '', '노상','노외','부설'
-
-// 데이터 풀: LIVE(실검색) + DEMO(테스트) → VIEW(필터 결과)
-let LIVE = [];
-let DEMO = [];
-let VIEW = [];
-
-function showToast(msg, ms=2000){
-  toast.textContent = msg; toast.style.display='block';
-  clearTimeout(showToast._t); showToast._t=setTimeout(()=>toast.style.display='none', ms);
-}
-
-/* =========================
-   A) 브이월드 준비 대기 → 준비되면 바로 맵 생성
-   ========================= */
-function waitForVWorld(maxMs=12000){
-  const start = performance.now();
-  return new Promise((resolve, reject)=>{
-    (function poll(){
-      if(window.vw && vw.ol3 && window.ol){ resolve(); return; }
-      if(performance.now()-start > maxMs){ reject(new Error('VWorld load timeout')); return; }
-      setTimeout(poll, 60);
-    })();
-  });
-}
-
-/* =========================
-   1) 지도/레이어
-   ========================= */
-let vmap, vectorSrc, clusterSrc, clusterLayer, overlay;
-let meLayer, radiusLayer, adminLayer;
-let popupEl;
-
-function updateSizeSafe(){
-  const real = vmap?.getMap ? vmap.getMap() : (vmap?.map || vmap);
-  try{ real && real.updateSize && real.updateSize(); }catch(_){}
-}
-
-function initMap(){
-  vw.ol3.MapOptions = {
-    basemapType: vw.ol3.BasemapType.GRAPHIC,
-    controlDensity: vw.ol3.DensityType.EMPTY,
-    interactionDensity: vw.ol3.DensityType.BASIC,
-    controlsAutoArrange: true,
-    homePosition: vw.ol3.CameraPosition,
-    initPosition: vw.ol3.CameraPosition
-  };
-  vmap = new vw.ol3.Map("map", vw.ol3.MapOptions);
-
-  const c = ol.proj.transform([ORIGIN.lng, ORIGIN.lat], 'EPSG:4326', 'EPSG:3857');
-  vmap.getView().setCenter(c); vmap.getView().setZoom(14);
-
-  vectorSrc   = new ol.source.Vector({ features: [] });
-  clusterSrc  = new ol.source.Cluster({ distance: 40, minDistance: 10, source: vectorSrc });
-  clusterLayer= new ol.layer.Vector({ source: clusterSrc, style: clusterStyle });
-  meLayer     = new ol.layer.Vector({ source: new ol.source.Vector() });
-  radiusLayer = new ol.layer.Vector({ source: new ol.source.Vector() });
-  adminLayer  = new ol.layer.Vector({ source: new ol.source.Vector() });
-
-  const realMap = (vmap.addLayer ? vmap : (vmap.getMap? vmap.getMap():vmap.map));
-  realMap.addLayer(clusterLayer);
-  realMap.addLayer(adminLayer); realMap.removeLayer(adminLayer); realMap.addLayer(adminLayer);
-  realMap.addLayer(radiusLayer);
-  realMap.addLayer(meLayer);
-
-  // 닫기 버튼 팝업
-  popupEl = document.createElement('div');
-  popupEl.className = 'ol-popup';
-  popupEl.innerHTML = `
-    <button class="x" aria-label="닫기">×</button>
-    <div class="tit"></div>
-    <div class="sub2 addr"></div>
-    <div class="sub2 meta"></div>
-  `;
-  overlay = new ol.Overlay({ element: popupEl, positioning: 'bottom-center', stopEvent: true, offset: [0, -12] });
-  (vmap.addOverlay ? vmap.addOverlay(overlay) : realMap).addOverlay?.(overlay);
-  popupEl.querySelector('.x').addEventListener('click', ()=> overlay.setPosition(undefined));
-  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') overlay.setPosition(undefined); });
-
-  vmap.on('click', function(evt){
-    let handled = false;
-    vmap.forEachFeatureAtPixel(evt.pixel, function(feature, layer){
-      if(layer !== clusterLayer) return;
-      const members = feature.get('features') || [];
-      if(members.length > 1){
-        const extent = ol.extent.createEmpty();
-        members.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
-        vmap.getView().fit(extent, { duration: 300, maxZoom: 17, padding: [40,20,40,380] });
-      }else if(members.length === 1){
-        const f = members[0]; const p = f.getProperties();
-        popupEl.querySelector('.tit').textContent  = p.nm || '주차장';
-        popupEl.querySelector('.addr').textContent = p.addr || '';
-        popupEl.querySelector('.meta').textContent = `형태: ${p.type || '주차장'} · 좌표: ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}`;
-        overlay.setPosition(evt.coordinate);
-        selEl.textContent = p.nm || '주차장';
-        highlightListItem(p.nm);
+      // HTML5 기본 검증 확인
+      if (!form.checkValidity()) {
+        // 사용자 친화적 메시지
+        const email = document.getElementById('email');
+        if (!email.value) {
+          errorBox.textContent = '이메일을 입력해주세요.';
+          email.focus();
+          return;
+        }
+        if (email.validity.typeMismatch) {
+          errorBox.textContent = '올바른 이메일 형식을 입력해주세요.';
+          email.focus();
+          return;
+        }
+        if (!pw.value) {
+          errorBox.textContent = '비밀번호를 입력해주세요.';
+          pw.focus();
+          return;
+        }
+        if (pw.value.length < 8) {
+          errorBox.textContent = '비밀번호는 최소 8자 이상이어야 합니다.';
+          pw.focus();
+          return;
+        }
+        return;
       }
-      handled = true; return true;
+
+      // 로딩 상태
+      submitBtn.disabled = true;
+      submitBtn.textContent = '로그인 중…';
+
+      // 여기에서 실제 로그인 API 호출을 수행하세요.
+      // fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: email.value, password: pw.value, remember: remember.checked }) })
+
+      // 데모용 딜레이 & 결과
+      await new Promise(r => setTimeout(r, 900));
+      // 데모: 이메일/패스워드 조건 예시
+      if (pw.value === 'password') {
+        errorBox.textContent = '보안상 취약한 비밀번호입니다. 다른 비밀번호를 사용하세요.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = '로그인';
+        pw.focus();
+        return;
+      }
+
+      alert('로그인 성공! (데모)');
+      submitBtn.textContent = '로그인';
+      submitBtn.disabled = false;
+      form.reset();
     });
-    if(!handled) overlay.setPosition(undefined);
-  });
 
-  // 맵 사이즈 보정(초기/리사이즈)
-  setTimeout(updateSizeSafe, 0);
-  window.addEventListener('resize', ()=> setTimeout(updateSizeSafe, 0));
-}
-
-const PARK_ICON_SVG = `
-<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
-  <circle cx='18' cy='18' r='16' fill='#2563eb'/>
-  <text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text>
-</svg>`;
-function clusterStyle(feature){
-  const size = (feature.get('features')||[]).length;
-  if(size > 1){
-    return new ol.style.Style({
-      image: new ol.style.Circle({
-        radius: Math.max(12, Math.min(28, 10 + Math.log(size)*8)),
-        fill: new ol.style.Fill({ color: [37,99,235,0.85] }),
-        stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
-      }),
-      text: new ol.style.Text({
-        text: String(size),
-        fill: new ol.style.Fill({ color: '#ffffff' }),
-        stroke: new ol.style.Stroke({ color: '#000000', width: 3 })
-      })
-    });
-  }
-  return new ol.style.Style({
-    image: new ol.style.Icon({
-      src: 'data:image/svg+xml;utf8,' + encodeURIComponent(PARK_ICON_SVG.trim()),
-      scale: 1.0, anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction'
-    })
-  });
-}
-
-/* =========================
-   2) 유틸/계산
-   ========================= */
-function km(a,b){
-  const R=6371,toRad=d=>d*Math.PI/180;
-  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
-  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
-  const t=s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
-  return 2*R*Math.asin(Math.sqrt(t));
-}
-function degBoxAround(lng, lat, kmRadius){
-  const dLat = kmRadius/111;
-  const dLng = kmRadius/(111*Math.cos(lat*Math.PI/180));
-  return [lng-dLng, lat-dLat, lng+dLng, lat+dLat];
-}
-function inferType(name="", category="", addr=""){
-  if(/노상/.test(name)||/노상/.test(category)) return "노상";
-  if(/노외|공영|타워|주차타워/.test(name)||/노외|공영|타워/.test(category)) return "노외";
-  if(/부설|몰|백화점|병원|학교|아파트/.test(name+addr)) return "부설";
-  return "노외";
-}
-
-/* =========================
-   3) 데이터(실검색 + 데모)
-   ========================= */
-async function vworldPlaceSearch(query, page=1, size=100){
-  const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0`
-            + `&format=json&errorformat=json&crs=EPSG:4326&type=place`
-            + `&size=${size}&page=${page}&key=${encodeURIComponent(VWORLD_KEY)}`
-            + `&domain=${encodeURIComponent(VWORLD_DOMAIN)}`
-            + `&query=${encodeURIComponent(query)}`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('VWorld 요청 실패');
-  const json = await res.json();
-  if(json.response && json.response.status==='OK') return json.response.result.items||[];
-  return [];
-}
-function generateDemo(n=50){
-  const out=[];
-  for(let i=0;i<n;i++){
-    const r = (Math.random()*2.6 + 0.2); // 0.2~2.8 km (3km 안쪽 보장)
-    const ang = Math.random()*Math.PI*2;
-    const dLat = (r/111)*Math.sin(ang);
-    const dLng = (r/(111*Math.cos(ORIGIN.lat*Math.PI/180)))*Math.cos(ang);
-    const lat = ORIGIN.lat + dLat, lng = ORIGIN.lng + dLng;
-    const types = ['노상','노외','부설'];
-    const t = types[i%3];
-    out.push({
-      id:`DEMO-${ORIGIN.lng.toFixed(4)}-${ORIGIN.lat.toFixed(4)}-${i}`,
-      nm:`데모 ${t} 주차장 ${i+1}`,
-      lng, lat,
-      addr:`데모로 ${i+1} (반경 ${r.toFixed(1)}km)`,
-      type:t
-    });
-  }
-  return out;
-}
-async function loadLive(){
-  let rows = [];
-  try{
-    const live = []
-      .concat(await vworldPlaceSearch('김천시 주차장',1,100))
-      .concat(await vworldPlaceSearch('김천 주차',1,100));
-    const seen = new Set();
-    for(const it of live){
-      const lng = Number(it.point?.x), lat = Number(it.point?.y);
-      if(!isFinite(lng)||!isFinite(lat)) continue;
-      const title = String(it.title||'');
-      const road  = it.address?.road || it.address?.parcel || '';
-      const cat   = it.category || '';
-      if(!(/주차/.test(road)||/주차/.test(title))) continue;
-      const key = `${title}@${lng.toFixed(6)},${lat.toFixed(6)}`;
-      if(seen.has(key)) continue; seen.add(key);
-      rows.push({ id:key, nm:title, lng, lat, addr:road, type:inferType(title,cat,road) });
+    function demoSignin(provider){
+      alert(provider + ' OAuth 데모입니다.');
     }
-  }catch(e){ console.warn('검색 실패(무시):', e); }
-  LIVE = rows;
-  recompute();
-}
-
-/* =========================
-   4) 뷰 계산/표시
-   ========================= */
-function buildList(rows){
-  const list = $('#list');
-  if(rows.length===0){
-    list.innerHTML = `<div class="item"><div class="nm">결과 없음</div><div class="sub">반경 3km / 형태: ${currentType||'전체'}</div></div>`;
-    countEl.textContent = '0';
-    return;
-  }
-  list.innerHTML = rows.map((r,i)=>`
-    <div class="item" data-id="${r.id}" role="option" tabindex="0">
-      <div class="nm">${i+1}. ${r.nm}</div>
-      <div class="sub">
-        <span class="badge">${r.type}</span>
-        <span class="dist">${r.distKm.toFixed(2)} km</span>
-        <span>${r.addr||''}</span>
-      </div>
-    </div>
-  `).join('');
-  countEl.textContent = String(rows.length);
-
-  list.querySelectorAll('.item').forEach(el=>{
-    el.addEventListener('click', ()=> focusItem(el.dataset.id));
-    el.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ focusItem(el.dataset.id); e.preventDefault(); } });
-  });
-}
-function highlightListItem(name){
-  const list = $('#list');
-  list.querySelectorAll('.item').forEach(el=> el.classList.remove('active'));
-  const el = Array.from(list.querySelectorAll('.item')).find(x => x.querySelector('.nm')?.textContent.includes(name));
-  if(el){ el.classList.add('active'); el.scrollIntoView({block:'nearest', behavior:'smooth'}); }
-}
-function focusItem(id){
-  const r = VIEW.find(x => x.id===id);
-  if(!r) return;
-  const coord = ol.proj.transform([r.lng, r.lat],'EPSG:4326','EPSG:3857');
-  vmap.getView().setCenter(coord); vmap.getView().setZoom(16);
-  popupEl.querySelector('.tit').textContent  = r.nm;
-  popupEl.querySelector('.addr').textContent = r.addr || '';
-  popupEl.querySelector('.meta').textContent = `형태: ${r.type} · 좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}`;
-  overlay.setPosition(coord);
-  selEl.textContent = r.nm;
-  highlightListItem(r.nm);
-}
-function rebuildMarkers(rows){
-  const feats = rows.map(r=>{
-    const coord = ol.proj.transform([r.lng, r.lat], 'EPSG:4326', 'EPSG:3857');
-    const f = new ol.Feature({ geometry:new ol.geom.Point(coord) });
-    f.setProperties({ nm:r.nm, addr:r.addr, type:r.type, lng:r.lng, lat:r.lat });
-    return f;
-  });
-  vectorSrc.clear(); vectorSrc.addFeatures(feats);
-}
-function recompute(){
-  const ALL = LIVE.concat(DEMO); // 항상 DEMO 포함
-  const within = ALL.map(r=>{
-    const dkm = km(ORIGIN, {lng:r.lng, lat:r.lat});
-    return { ...r, distKm: dkm };
-  }).filter(r => r.distKm*1000 <= RADIUS_M);
-
-  const rows = within
-    .filter(r => !currentType || r.type===currentType)
-    .sort((a,b)=>a.distKm - b.distKm);
-
-  VIEW = rows;
-  buildList(rows);
-  rebuildMarkers(rows);
-}
-
-/* =========================
-   5) 현재 위치 & 반경
-   ========================= */
-function drawOrigin(lng, lat){
-  const PERSON_ICON_SVG = `
-  <svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'>
-    <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
-      <stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs>
-    <path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/>
-    <circle cx='19' cy='12' r='5' fill='#fff'/>
-    <path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/>
-  </svg>`;
-  const c = ol.proj.transform([lng, lat], 'EPSG:4326', 'EPSG:3857');
-  const me = new ol.Feature({ geometry: new ol.geom.Point(c) });
-  me.setStyle(new ol.style.Style({
-    image:new ol.style.Icon({
-      src: 'data:image/svg+xml;utf8,'+encodeURIComponent(PERSON_ICON_SVG.trim()),
-      scale:1.0, anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction'
-    })
-  }));
-  meLayer.getSource().clear(); meLayer.getSource().addFeature(me);
-
-  const circle = new ol.geom.Circle(c, RADIUS_M);
-  const feat = new ol.Feature(circle);
-  feat.setStyle(new ol.style.Style({
-    stroke:new ol.style.Stroke({ color:[220,38,38,0.9], width:2 }),
-    fill:new ol.style.Fill({ color:[220,38,38,0.12] })
-  }));
-  radiusLayer.getSource().clear(); radiusLayer.getSource().addFeature(feat);
-}
-function setOrigin(lng, lat, fly=true){
-  ORIGIN = {lng, lat};
-  drawOrigin(lng, lat);
-  // 중심 바뀔 때마다 데모 재생성 → 항상 반경 3km 내에 충분한 포인트 보장
-  DEMO = generateDemo(50);
-  if(fly){
-    const c = ol.proj.transform([lng,lat],'EPSG:4326','EPSG:3857');
-    vmap.getView().setCenter(c); vmap.getView().setZoom(15);
-  }
-  recompute();
-  loadAdminBoundaries(); // 시/구 경계 갱신
-}
-
-/* =========================
-   6) 자동 현재위치 (로드와 동시에 시도)
-   ========================= */
-async function autoLocate(){
-  const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-  if(!secureOK || !navigator.geolocation){ return; }
-
-  let fixed = false;
-  const opts = { enableHighAccuracy:true, maximumAge:5000, timeout:8000 };
-
-  const wid = navigator.geolocation.watchPosition(pos=>{
-    if(fixed) return;
-    fixed = true;
-    navigator.geolocation.clearWatch(wid);
-    setOrigin(pos.coords.longitude, pos.coords.latitude, true);
-  }, ()=>{}, opts);
-
-  navigator.geolocation.getCurrentPosition(pos=>{
-    if(fixed) return;
-    fixed = true;
-    navigator.geolocation.clearWatch(wid);
-    setOrigin(pos.coords.longitude, pos.coords.latitude, true);
-  }, ()=>{}, opts);
-}
-
-/* =========================
-   7) 행정경계 (시/구) – 붉은 선
-   ========================= */
-async function fetchWFS(typename, bbox4326){
-  const url = `https://api.vworld.kr/req/wfs?service=WFS&request=GetFeature&version=1.0.0`
-            + `&typename=${encodeURIComponent(typename)}`
-            + `&outputFormat=application/json&srsName=EPSG:4326`
-            + `&bbox=${bbox4326.join(',')},EPSG:4326`
-            + `&key=${encodeURIComponent(VWORLD_KEY)}&domain=${encodeURIComponent(VWORLD_DOMAIN)}`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('WFS 요청 실패');
-  return await res.json();
-}
-async function loadAdminBoundaries(){
-  try{
-    const bbox = degBoxAround(ORIGIN.lng, ORIGIN.lat, 12);
-    const T_SIDO = 'lt_c_adsido';
-    const T_SIGG = 'lt_c_adsigg';
-
-    const [sido, sigg] = await Promise.all([
-      fetchWFS(T_SIDO, bbox).catch(_=>null),
-      fetchWFS(T_SIGG, bbox).catch(_=>null),
-    ]);
-
-    const fmt = new ol.format.GeoJSON();
-    const src = adminLayer.getSource();
-    src.clear();
-
-    const add = (geojson, color) =>{
-      if(!geojson) return;
-      const feats = fmt.readFeatures(geojson, { dataProjection:'EPSG:4326', featureProjection:'EPSG:3857' });
-      feats.forEach(f=>{
-        f.setStyle(new ol.style.Style({ stroke:new ol.style.Stroke({ color, width:2.2 }), fill: null }));
-      });
-      src.addFeatures(feats);
-    };
-    add(sido, 'rgba(239,68,68,0.95)');
-    add(sigg, 'rgba(239,68,68,0.95)');
-  }catch(e){
-    console.warn('행정경계 로드 실패', e);
-    showToast('행정경계 로드 실패(계정/도메인/레이어명 확인)');
-  }
-}
-
-/* =========================
-   8) 타입 칩
-   ========================= */
-function initTypeBar(){
-  const bar = $('#typeBar');
-  bar.addEventListener('click', (e)=>{
-    const chip = e.target.closest('.chip'); if(!chip) return;
-    bar.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
-    chip.classList.add('active');
-    currentType = chip.dataset.type || "";
-    recompute();
-  });
-}
-
-/* =========================
-   9) 부트스트랩 (로드 즉시 지도 보이기)
-   - 브이월드 준비를 기다렸다가: 맵 생성 → 기본점으로 즉시 표시(데모 포함)
-   - 그 다음 현재위치 자동 보정, 실데이터 추가 로드
-   ========================= */
-async function bootstrap(){
-  try{
-    await waitForVWorld();            // 1) VWorld 준비 기다림
-    initMap();                        // 2) 맵 즉시 생성
-    setOrigin(ORIGIN.lng, ORIGIN.lat, true); // 3) 기본 김천 중심으로 바로 표시(데모 50개 생성됨)
-    initTypeBar();
-    loadAdminBoundaries();            // 4) 경계
-    autoLocate();                     // 5) 현재위치 자동 보정(가능 시 중심 이동)
-    loadLive();                       // 6) 실데이터 추가
-    showToast('지도를 불러왔습니다');
-  }catch(e){
-    console.error(e);
-    showToast('VWorld 로드에 실패했습니다(키/도메인/네트워크 확인)');
-  }
-}
-
-/* 보조 버튼 */
-document.getElementById('locBtn').addEventListener('click', autoLocate);
-document.getElementById('fitBtn').addEventListener('click', ()=>{
-  const extent = ol.extent.createEmpty();
-  radiusLayer?.getSource()?.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
-  vectorSrc?.getFeatures()?.forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
-  if(!ol.extent.isEmpty(extent)){ vmap.getView().fit(extent, {duration:400, padding:[40,20,40,380], maxZoom:16}); }
-});
-document.getElementById('reloadAdminBtn').addEventListener('click', loadAdminBoundaries);
-
-/* DOM 준비되면 바로 부트스트랩 → 버튼 누를 필요 없음 */
-document.addEventListener('DOMContentLoaded', bootstrap);
-</script>
+  </script>
 </body>
 </html>
