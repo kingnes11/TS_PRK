@@ -2,22 +2,19 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>브이월드 안전 로더 · 적용판(자동 OSM 폴백)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>브이월드 로더 · 502 진단 + 더미1000 클러스터</title>
 
-<!-- ★ 브이월드 스크립트 (key/domain 인코딩 없이) -->
+<!-- VWorld (도메인은 콘솔 등록값과 동일해야 함) -->
 <script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=kingnes11.github.io"></script>
 
 <style>
   html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif;background:#0b1220;color:#e5e7eb}
   #map{position:fixed;inset:0}
-  .panel{position:fixed;left:12px;top:12px;z-index:50;background:#0f172a;border:1px solid #20304f;border-radius:12px;padding:10px 12px;max-width:620px}
-  .panel b{color:#fff}
-  .muted{color:#9ca3af}
-  .ok{color:#10b981}.bad{color:#ef4444}.warn{color:#f59e0b}
+  .panel{position:fixed;left:12px;top:12px;z-index:50;background:#0f172a;border:1px solid #20304f;border-radius:12px;padding:10px 12px;max-width:720px}
+  .muted{color:#9ca3af}.ok{color:#10b981}.bad{color:#ef4444}.warn{color:#f59e0b}
   .btn{border:1px solid #334155;background:transparent;color:#c7d2fe;border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer;margin-right:6px}
-  .btn.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:transparent;color:#fff}
-  pre{margin:8px 0 0;white-space:pre-wrap;font-size:.9rem;color:#cbd5e1;max-height:36vh;overflow:auto}
+  pre{margin:8px 0 0;white-space:pre-wrap;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;max-height:38vh;overflow:auto;color:#cbd5e1}
 </style>
 </head>
 <body>
@@ -27,80 +24,142 @@
   <div><b>브이월드 로더</b> <span id="step" class="muted">대기 중…</span></div>
   <div style="margin-top:6px">
     <button id="retry" class="btn">다시 시도</button>
-    <button id="osm" class="btn">OSM 폴백 보기</button>
+    <button id="diag"  class="btn">502 상세진단</button>
+    <button id="osm"   class="btn">OSM 폴백 보기</button>
     <button id="clear" class="btn">오버레이 숨기기</button>
   </div>
   <pre id="log"></pre>
 </div>
 
 <script>
-/* =========================
-   설정
-========================= */
+/* ===== 설정 ===== */
 const VWORLD_URL =
   "https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=kingnes11.github.io";
 
-/* 자동 폴백: 브이월드 실패 시 OSM로 자동 전환 (ON) */
-const ALLOW_OSM_FALLBACK = true;
+const INIT_LNG = 128.1136, INIT_LAT = 36.1398; // 김천
+const DEMO_COUNT = 1000;   // ← 더미 개수
+const RADIUS_KM  = 5.0;    // ← 반경(KM)
 
-/* 초기 중심(김천 교통안전공단) */
-const INIT_LNG = 128.1136, INIT_LAT = 36.1398;
-
-/* =========================
-   DOM 유틸
-========================= */
+/* ===== UI 유틸 ===== */
 const $ = (s)=>document.querySelector(s);
-const stepEl = $('#step'), logEl = $('#log');
-function log(msg){ logEl.textContent += msg + '\n'; }
-function step(msg, cls=''){ stepEl.textContent = msg; stepEl.className = cls || 'muted'; }
+const stepEl=$('#step'), logEl=$('#log');
+const step=(m,cls='muted')=>{ stepEl.textContent=m; stepEl.className=cls; };
+const log =(m)=>{ logEl.textContent += m + '\n'; };
 
-/* 전역 지도 핸들(브이월드/OSM 공통) */
-window.olmap = null;
-
-/* =========================
-   공통 로더/체커
-========================= */
+/* ===== 로더/대기 ===== */
 function loadScript(url, timeoutMs=8000){
-  return new Promise((resolve, reject)=>{
-    const s = document.createElement('script');
-    const tid = setTimeout(()=>{
-      s.remove();
-      reject(new Error('timeout'));
-    }, timeoutMs);
-    s.src = url; s.async = true; s.defer = false;
-    s.onload = ()=>{ clearTimeout(tid); resolve('loaded'); };
-    s.onerror = ()=>{ clearTimeout(tid); reject(new Error('onerror')); };
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    const tid=setTimeout(()=>{ s.remove(); reject(new Error('timeout')); }, timeoutMs);
+    s.src=url; s.async=true; s.defer=false;
+    s.onload =()=>{ clearTimeout(tid); resolve('loaded'); };
+    s.onerror=()=>{ clearTimeout(tid); reject(new Error('onerror')); };
     document.head.appendChild(s);
   });
 }
-
-/* ★ 강화된 대기: Map/BasemapType/DensityType 까지 검사 */
 function waitVWorldReady(maxMs=8000){
-  const t0 = performance.now();
-  return new Promise((resolve, reject)=>{
+  const t0=performance.now();
+  return new Promise((resolve,reject)=>{
     (function tick(){
-      const ok = !!(window.vw && vw.ol3 && vw.ol3.Map && vw.ol3.BasemapType && vw.ol3.DensityType);
-      if (ok) return resolve(true);
-      if (performance.now() - t0 > maxMs)
-        return reject(new Error('vw.ol3 not ready (no Map/BasemapType)'));
-      setTimeout(tick, 120);
+      const ok=!!(window.vw && vw.ol3 && vw.ol3.Map && vw.ol3.BasemapType && vw.ol3.DensityType);
+      if(ok) return resolve(true);
+      if(performance.now()-t0>maxMs) return reject(new Error('vw.ol3 not ready (no Map/BasemapType)'));
+      setTimeout(tick,120);
     })();
   });
 }
 
-/* OSM용 OpenLayers6 보장 */
-async function ensureOpenLayers6(){
-  if (window.ol && ol.proj && ol.layer && ol.source) return;
-  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.js", 8000);
-  if(!(window.ol && ol.Map)) throw new Error('OpenLayers 6 load failed');
+/* ===== 502 상세진단(fetch + 프록시) ===== */
+async function diagnoseHTTP(url){
+  log(`\n[DIAG] target: ${url}`);
+
+  try{
+    const res = await fetch(url, { method:'GET', mode:'cors', cache:'no-store' });
+    log(`[direct CORS] status=${res.status} ${res.statusText}, type=${res.type}`);
+    log(`[direct CORS] content-type=${res.headers.get('content-type')||'-'}`);
+    const text = await res.text();
+    log(`[direct CORS] body(head 500 chars):\n` + text.slice(0,500));
+  }catch(e){ log(`[direct CORS] error: ${e}`); }
+
+  try{
+    const res = await fetch(url, { method:'GET', mode:'no-cors', cache:'no-store' });
+    log(`[no-cors] type=${res.type} (opaque면 CORS 미허용)`);
+  }catch(e){ log(`[no-cors] error: ${e}`); }
+
+  setTimeout(()=>{
+    const entry = performance.getEntriesByName(url).pop();
+    if(entry){
+      log(`[perf] duration=${entry.duration.toFixed(1)}ms, transferSize=${entry.transferSize}, nextHopProtocol=${entry.nextHopProtocol||'-'}`);
+    }else log(`[perf] no performance entry`);
+  }, 300);
+
+  try{
+    const api = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+    const res = await fetch(api, { cache:'no-store' });
+    const data= await res.json();
+    const http = data?.status?.http_code;
+    const ctype= data?.status?.content_type;
+    log(`[allorigins] http_code=${http}, content-type=${ctype}`);
+    const head = String(data?.contents||'').slice(0,600);
+    log(`[allorigins] body(head 600 chars):\n` + head);
+  }catch(e){ log(`[allorigins] error: ${e}`); }
+
+  log(`[DIAG] done.\n`);
 }
 
-/* =========================
-   지도 빌더
-========================= */
-/* ★ 브이월드 지도 생성(상수 접근 불가 시 옵션 최소화 경로로 자동 전환) */
-function buildVWorld(){
-  // 1) 상수 이용 가능한 경우
+/* ===== 공통(스타일/클러스터/더미) ===== */
+const PARK_ICON_SVG =
+  `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
+     <circle cx='18' cy='18' r='16' fill='#2563eb'/>
+     <text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text>
+   </svg>`;
+
+function iconStyle(){
+  return new ol.style.Style({
+    image:new ol.style.Icon({
+      src:'data:image/svg+xml;utf8,'+encodeURIComponent(PARK_ICON_SVG),
+      anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction', scale:1.0
+    })
+  });
+}
+function clusterStyle(feature){
+  const members = feature.get('features')||[];
+  const size = members.length;
+  if(size>1){
+    return new ol.style.Style({
+      image:new ol.style.Circle({
+        radius: Math.max(12, Math.min(28, 10 + Math.log(size)*8)),
+        fill: new ol.style.Fill({color:[37,99,235,0.92]}),
+        stroke:new ol.style.Stroke({color:'#fff',width:2})
+      }),
+      text:new ol.style.Text({
+        text:String(size),
+        fill:new ol.style.Fill({color:'#fff'}),
+        stroke:new ol.style.Stroke({color:'#000',width:3})
+      })
+    });
+  }
+  const m = members[0];
+  return (m && m.getStyle && m.getStyle()) || iconStyle();
+}
+
+function generateDummyAround(lng, lat, n=DEMO_COUNT, radiusKm=RADIUS_KM){
+  const feats=[];
+  for(let i=0;i<n;i++){
+    const rkm=Math.random()*radiusKm, ang=Math.random()*Math.PI*2;
+    const dLat=(rkm/111)*Math.sin(ang);
+    const dLng=(rkm/(111*Math.cos(lat*Math.PI/180)))*Math.cos(ang);
+    const y=lat+dLat, x=lng+dLng;
+    const c=ol.proj.fromLonLat([x,y]);
+    const f=new ol.Feature({ geometry:new ol.geom.Point(c), nm:`더미 주차장 ${i+1}`, lng:x, lat:y });
+    f.setStyle(iconStyle());
+    feats.push(f);
+  }
+  return feats;
+}
+
+/* ===== 브이월드 빌드 (더미1000+클러스터) ===== */
+function buildVWorldWithDummies(){
   let vmap;
   try{
     vmap = new vw.ol3.Map("map", {
@@ -110,123 +169,92 @@ function buildVWorld(){
       controlsAutoArrange: true
     });
   }catch(e){
-    // 2) 상수 접근 자체가 막힌 특이 환경: 옵션 없이 최소 생성 시도
-    log('⚠️ BasemapType 접근 실패 → 옵션 최소화로 재시도');
-    vmap = new vw.ol3.Map("map", {}); // 최소 옵션
+    log('⚠️ BasemapType 접근 실패 → 최소 옵션으로 재시도');
+    vmap = new vw.ol3.Map("map", {});
   }
-
-  // OpenLayers 핸들 확보
   const map = vmap.getMap ? vmap.getMap() : (vmap.map || vmap);
   if(!(window.ol && map && map.getView)) throw new Error('OpenLayers handle missing');
 
-  // 초기 뷰
   const center = ol.proj.fromLonLat([INIT_LNG, INIT_LAT]);
   map.getView().setCenter(center);
   map.getView().setZoom(14);
 
-  // 샘플 마커
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
-  const iconStyle = new ol.style.Style({
-    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(svg), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction' })
-  });
-  const f = new ol.Feature({ geometry:new ol.geom.Point(center) });
-  f.setStyle(iconStyle);
-  const src = new ol.source.Vector({ features:[f] });
-  map.addLayer(new ol.layer.Vector({ source: src, zIndex:100 }));
+  const raw = new ol.source.Vector();
+  const clusterSrc = new ol.source.Cluster({ distance:40, minDistance:10, source: raw });
+  const clusterLy  = new ol.layer.Vector({ source:clusterSrc, style:clusterStyle, zIndex:110 });
+  map.addLayer(clusterLy);
 
+  const t0=performance.now();
+  const feats = generateDummyAround(INIT_LNG, INIT_LAT, DEMO_COUNT, RADIUS_KM);
+  raw.addFeatures(feats);
+  log(`✅ 브이월드 더미 ${DEMO_COUNT}개 추가, ${(performance.now()-t0).toFixed(0)}ms`);
   return map;
 }
 
-/* OSM 폴백 지도 */
-async function buildOSM(){
-  await ensureOpenLayers6();
+/* ===== OSM 폴백 빌드 (더미1000+클러스터) ===== */
+async function buildOSMWithDummies(){
+  if(!(window.ol && ol.Map)){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.js';
+      s.onload=res; s.onerror=()=>rej(new Error('OL CDN 실패'));
+      document.head.appendChild(s);
+    });
+  }
   const map = new ol.Map({
-    target: 'map',
-    layers: [ new ol.layer.Tile({ source:new ol.source.OSM() }) ],
-    view: new ol.View({ center: ol.proj.fromLonLat([INIT_LNG, INIT_LAT]), zoom: 14 })
+    target:'map',
+    layers:[ new ol.layer.Tile({ source:new ol.source.OSM() }) ],
+    view:new ol.View({ center: ol.proj.fromLonLat([INIT_LNG, INIT_LAT]), zoom:14 })
   });
-  // 샘플 마커(색만 변경)
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#22c55e'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
-  const iconStyle = new ol.style.Style({
-    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(svg), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction' })
-  });
-  const center = ol.proj.fromLonLat([INIT_LNG, INIT_LAT]);
-  const f = new ol.Feature({ geometry:new ol.geom.Point(center) }); f.setStyle(iconStyle);
-  const src = new ol.source.Vector({ features:[f] });
-  map.addLayer(new ol.layer.Vector({ source: src, zIndex:100 }));
+
+  const raw = new ol.source.Vector();
+  const clusterSrc = new ol.source.Cluster({ distance:40, minDistance:10, source: raw });
+  const clusterLy  = new ol.layer.Vector({ source:clusterSrc, style:clusterStyle, zIndex:110 });
+  map.addLayer(clusterLy);
+
+  const t0=performance.now();
+  const feats = generateDummyAround(INIT_LNG, INIT_LAT, DEMO_COUNT, RADIUS_KM);
+  raw.addFeatures(feats);
+  log(`✅ OSM 더미 ${DEMO_COUNT}개 추가, ${(performance.now()-t0).toFixed(0)}ms`);
   return map;
 }
 
-/* =========================
-   부트 시퀀스
-========================= */
+/* ===== 메인 부트 ===== */
 async function boot(){
-  // 로그 초기화
-  logEl.textContent = '';
+  logEl.textContent='';
   step('브이월드 스크립트 로드 중…');
-
   try{
     await loadScript(VWORLD_URL, 8000);
-    step('브이월드 로드됨, 엔진 준비 대기…', 'warn');
-    log('script loaded OK (HTTP 200일 가능)');
-
+    step('브이월드 로드됨, 엔진 준비 대기…','warn');
     await waitVWorldReady(8000);
-    step('vw.ol3 준비됨 → 지도 생성', 'ok');
+    step('vw.ol3 준비됨 → 지도 생성','ok');
 
-    window.olmap = buildVWorld();
-    step('브이월드 지도 OK', 'ok');
-    log('브이월드 지도 초기화 성공');
+    window.olmap = buildVWorldWithDummies();
+    step('브이월드 지도 OK (더미1000)','ok');
+    log('script loaded OK (HTTP 200). 엔진(vw.ol3) 정상 노출 시 더미/클러스터 적용');
   }catch(err){
-    // 실패 원인 로깅
-    const msg = err?.message || String(err);
-    if(msg.includes('timeout')){
-      step('브이월드 스크립트 타임아웃', 'bad');
-      log('❌ map.vworld.kr 응답 지연: 네트워크/방화벽/서버 이슈 의심');
-    }else if(msg.includes('onerror')){
-      step('브이월드 스크립트 로드 실패', 'bad');
-      log('❌ onerror: URL 차단/도메인 불일치/키 권한 실패(403/502) 가능');
-    }else if(msg.includes('not ready')){
-      step('vw.ol3 객체가 준비되지 않음', 'bad');
-      log('❌ 응답은 있었으나 엔진 노출 실패: 502/권한 실패/내부 오류 가능');
-    }else{
-      step('예상 외 오류: '+msg, 'bad');
-      log('❌ '+(err.stack||msg));
-    }
+    step('브이월드 실패: '+(err?.message||err),'bad');
+    log('❌ 브이월드 엔진 미노출 — 502/권한/내부오류 가능');
+    await diagnoseHTTP(VWORLD_URL);
 
-    // 자동 폴백
-    if (ALLOW_OSM_FALLBACK){
-      try{
-        step('브이월드 실패 → OSM 폴백 로드 중…', 'warn');
-        window.olmap = await buildOSM();
-        step('OSM 폴백 표시 중', 'ok');
-        log('✅ OSM 폴백 성공 — 브이월드 문제 해결되는 동안 개발 계속 가능');
-      }catch(e){
-        step('OSM 폴백 실패: '+(e?.message||e), 'bad');
-      }
-    }else{
-      log('ℹ️ 자동 폴백 비활성화 상태입니다. ALLOW_OSM_FALLBACK=true로 바꾸면 자동 전환됩니다.');
-    }
+    step('OSM 폴백 로드 중…','warn');
+    window.olmap = await buildOSMWithDummies();
+    step('OSM 폴백 표시 중 (더미1000)','ok');
+    log('✅ OSM 폴백 성공 — 브이월드 문제 해결되는 동안 개발 계속 가능');
   }
 }
 
-/* =========================
-   버튼 액션
-========================= */
+/* 버튼 */
 $('#retry').addEventListener('click', boot);
-$('#clear').addEventListener('click', ()=>$('.panel').style.display='none');
-$('#osm').addEventListener('click', async ()=>{
-  try{
-    step('수동 OSM 폴백 로드 중…', 'warn');
-    window.olmap = await buildOSM();
-    step('OSM 폴백 표시 중', 'ok');
-  }catch(e){
-    step('OSM 폴백 실패: '+(e?.message||e), 'bad');
-  }
+$('#diag' ).addEventListener('click', ()=> diagnoseHTTP(VWORLD_URL));
+$('#osm'  ).addEventListener('click', async ()=>{
+  step('수동 OSM 폴백 로드 중…','warn');
+  window.olmap = await buildOSMWithDummies();
+  step('OSM 폴백 표시 중 (더미1000)','ok');
 });
+$('#clear').addEventListener('click', ()=>$('.panel').style.display='none');
 
-/* =========================
-   자동 시도
-========================= */
+/* 시작 */
 document.addEventListener('DOMContentLoaded', boot);
 </script>
 </body>
