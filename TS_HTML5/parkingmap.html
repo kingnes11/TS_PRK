@@ -4,8 +4,10 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Parking Map (VWorld 2D)</title>
-<!-- 수정 후 -->
-<script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82"></script>
+
+<!-- 브이월드 2D 지도 API (apiKey 뒤 공백 금지) -->
+<script type="text/javascript" src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82"></script>
+
 <style>
   :root{
     --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
@@ -180,7 +182,7 @@ function initMap(){
   // 처음 화면 - 전체 보기
   fitAll();
 
-  // 마커 hover 시 id를 attribute에서 꺼내 쓸 수 있음 (필요 시 확장)
+  // 마커 hover 시 커서 변경
   vmap.on('pointermove', function(evt){
     vmap.getTargetElement().style.cursor = vmap.forEachFeatureAtPixel(evt.pixel, (f, layer)=>{
       return (layer && layer.className === 'vw.ol3.layer.Marker') ? 'pointer' : null;
