@@ -3,24 +3,47 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>브이월드 WMTS · 더미1000 클러스터</title>
+<title>브이월드 WMTS · 리스트 패널 + 필터 + 더미1000</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.js"></script>
 
 <style>
-  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif;background:#0b1220;color:#e5e7eb}
+  :root{
+    --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#2563eb; --accent2:#1d4ed8;
+    --border:#20304f; --chip:#1f2a44; --chipOn:#243a7a;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
   #map{position:fixed;inset:0}
 
-  /* 상단 상태/컨트롤 */
-  .panel{
-    position:fixed;left:12px;top:12px;z-index:50;background:#0f172a;border:1px solid #20304f;border-radius:12px;
-    padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap
+  /* 좌측 패널 */
+  .side{
+    position:fixed; left:12px; top:12px; bottom:12px; width:360px; z-index:30;
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px;
+    display:flex; flex-direction:column; gap:10px;
   }
-  .muted{color:#9ca3af}.ok{color:#10b981}.warn{color:#f59e0b}.bad{color:#ef4444}
-  .btn{border:1px solid #334155;background:transparent;color:#c7d2fe;border-radius:10px;padding:6px 10px;font-weight:700;cursor:pointer}
-  .btn.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:transparent;color:#fff}
+  @media (max-width:960px){ .side{ right:12px; width:auto } }
+
+  .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .title{font-weight:800; display:flex; gap:10px; align-items:center}
+  .muted{color:var(--muted)}
+  .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
+  .btn.primary{background:linear-gradient(180deg,var(--accent),var(--accent2)); border-color:transparent; color:#fff}
+  .btn.ghost{background:transparent}
+  .chipbar{display:flex; gap:8px; flex-wrap:wrap}
+  .chip{background:var(--chip); border:1px solid var(--border); color:#c7d2fe; padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem}
+  .chip.active{background:var(--chipOn); color:#fff; border-color:transparent}
+
+  .list{overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height:140px; background:#0c1530}
+  .item{padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:grid; gap:4px}
+  .item:last-child{border-bottom:0}
+  .item:hover{background:rgba(37,99,235,.08)}
+  .item.active{outline:2px solid var(--accent); outline-offset:-2px; background:rgba(37,99,235,.12)}
+  .nm{font-weight:700}
+  .sub{color:var(--muted); font-size:.92rem; display:flex; gap:6px; flex-wrap:wrap}
+  .badge{display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c}
+  .dist{color:#9ca3af}
 
   /* 팝업 */
   .ol-popup{
@@ -28,8 +51,7 @@
     min-width:230px;padding:10px 12px;transform:translate(-50%,-110%);box-shadow:0 10px 20px rgba(0,0,0,.25);pointer-events:auto
   }
   .ol-popup:after{
-    content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-10px;width:0;height:0;
-    border:10px solid transparent;border-top-color:#fff;filter:drop-shadow(0 -1px 0 #e5e7eb)
+    content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-10px;width:0;height:0;border:10px solid transparent;border-top-color:#fff;filter:drop-shadow(0 -1px 0 #e5e7eb)
   }
   .ol-popup .tit{font-weight:800;margin-right:26px}
   .ol-popup .sub2{color:#4b5563;font-size:.9rem}
@@ -39,46 +61,68 @@
 <body>
 <div id="map" aria-label="지도"></div>
 
-<div class="panel">
-  <span id="stat" class="muted">초기화 중…</span>
-  <button id="baseBtn" class="btn primary">기본지도</button>
-  <button id="satBtn"  class="btn">항공+문자</button>
-</div>
+<!-- 좌측 패널 -->
+<aside class="side">
+  <div class="row title">
+    <div>주차장(반경 <b id="radiusLabel">5</b>km)</div>
+    <div class="muted" style="margin-left:auto">총 <b id="count">0</b>곳 · 선택: <b id="sel">-</b></div>
+  </div>
+
+  <div class="row">
+    <button class="btn primary" id="baseBtn">기본지도</button>
+    <button class="btn" id="satBtn">항공+문자</button>
+    <span id="stat" class="muted" style="margin-left:auto">초기화 중…</span>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="locBtn">현재 위치</button>
+    <button class="btn ghost" id="fitBtn">전체 보기</button>
+  </div>
+
+  <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
+    <div class="chip active" data-type="">전체</div>
+    <div class="chip" data-type="노상">노상</div>
+    <div class="chip" data-type="노외">노외</div>
+    <div class="chip" data-type="부설">부설</div>
+  </div>
+
+  <div id="list" class="list" role="listbox" aria-label="주차장 목록"></div>
+</aside>
 
 <script>
 (function(){
   /* ===== 설정 ===== */
-  const VW_KEY   = 'CF9A371B-35A6-3822-8315-6592C8342E82'; // 브이월드 키
-  const INIT     = { lng:128.1136, lat:36.1398 };          // 김천(교통안전공단)
-  const DEMO_N   = 1000;  // 더미 개수
-  const RADIUS_KM= 5.0;   // 반경(km)
+  const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82'; // WMTS 키
+  const INIT   = { lng:128.1136, lat:36.1398 };          // 김천(한국교통안전공단)
+  const DEMO_N = 1000;          // 더미 개수
+  const RADIUS_KM = 5.0;        // 반경
+  document.getElementById('radiusLabel').textContent = RADIUS_KM;
 
-  const stat = document.getElementById('stat');
-  const ok   = (m)=> stat.innerHTML = `<span class="ok">✔</span> ${m}`;
-  const warn = (m)=> stat.innerHTML = `<span class="warn">!</span> ${m}`;
-  const bad  = (m)=> stat.innerHTML = `<span class="bad">✖</span> ${m}`;
+  /* ===== 상태/UI 유틸 ===== */
+  const $ = (s)=>document.querySelector(s);
+  const stat = $('#stat');
+  const ok   = (m)=> stat.innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
+  const warn = (m)=> stat.innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
+  const bad  = (m)=> stat.innerHTML = `<span style="color:#ef4444">✖</span> ${m}`;
 
-  /* ===== WMTS 타일 레이어 (브이월드 로더 없이) ===== */
+  /* ===== WMTS 타일 (브이월드 로더 없음) ===== */
   const vworldBase = new ol.layer.Tile({
     source: new ol.source.XYZ({
       url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`
     }),
-    zIndex: 0,
-    visible: true
+    zIndex: 0, visible: true
   });
   const vworldSat = new ol.layer.Tile({
     source: new ol.source.XYZ({
       url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Satellite/{z}/{y}/{x}.jpeg`
     }),
-    zIndex: 0,
-    visible: false
+    zIndex: 0, visible: false
   });
   const vworldHybrid = new ol.layer.Tile({
     source: new ol.source.XYZ({
       url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Hybrid/{z}/{y}/{x}.png`
     }),
-    zIndex: 1,          // 문자 오버레이
-    visible: false
+    zIndex: 1, visible: false
   });
 
   /* ===== 지도 ===== */
@@ -88,20 +132,14 @@
     view: new ol.View({ center: ol.proj.fromLonLat([INIT.lng, INIT.lat]), zoom: 14 })
   });
 
-  // 레이어 토글 버튼
-  document.getElementById('baseBtn').addEventListener('click', ()=>{
-    vworldBase.setVisible(true);
-    vworldSat.setVisible(false);
-    vworldHybrid.setVisible(false);
-    document.getElementById('baseBtn').classList.add('primary');
-    document.getElementById('satBtn').classList.remove('primary');
+  // 베이스/항공 토글
+  $('#baseBtn').addEventListener('click', ()=>{
+    vworldBase.setVisible(true); vworldSat.setVisible(false); vworldHybrid.setVisible(false);
+    $('#baseBtn').classList.add('primary'); $('#satBtn').classList.remove('primary');
   });
-  document.getElementById('satBtn').addEventListener('click', ()=>{
-    vworldBase.setVisible(false);
-    vworldSat.setVisible(true);
-    vworldHybrid.setVisible(true);   // 문자
-    document.getElementById('satBtn').classList.add('primary');
-    document.getElementById('baseBtn').classList.remove('primary');
+  $('#satBtn').addEventListener('click', ()=>{
+    vworldBase.setVisible(false); vworldSat.setVisible(true); vworldHybrid.setVisible(true);
+    $('#satBtn').classList.add('primary'); $('#baseBtn').classList.remove('primary');
   });
 
   /* ===== 아이콘/스타일 ===== */
@@ -129,9 +167,10 @@
     fill:  new ol.style.Fill({ color:[239,68,68,0.08] })
   });
 
-  /* ===== 데이터 소스/레이어 ===== */
+  /* ===== 소스/레이어 ===== */
   const meSrc   = new ol.source.Vector();           // 현재 위치 + 반경 원
   const meLayer = new ol.layer.Vector({ source: meSrc, zIndex: 120 });
+  map.addLayer(meLayer);
 
   const rawSrc  = new ol.source.Vector();           // 원시 더미
   const clusterSrc = new ol.source.Cluster({ distance: 40, minDistance: 10, source: rawSrc });
@@ -159,9 +198,7 @@
     },
     zIndex: 110
   });
-
   map.addLayer(clusterLy);
-  map.addLayer(meLayer);
 
   /* ===== 팝업 ===== */
   const popupEl = document.createElement('div');
@@ -177,10 +214,12 @@
     const p=f.getProperties();
     popupEl.querySelector('.tit').textContent  = p.nm || '주차장';
     popupEl.querySelector('.addr').textContent = p.addr || '';
-    popupEl.querySelector('.meta').textContent = `좌표: ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}`;
+    popupEl.querySelector('.meta').textContent = `형태: ${p.type||'-'} · 좌표: ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}`;
     overlay.setPosition(coord);
+    $('#sel').textContent = p.nm || '-';
   }
 
+  // 맵 클릭: 클러스터면 확대, 단일이면 팝업+리스트 하이라이트
   map.on('singleclick', (evt)=>{
     let handled=false;
     map.forEachFeatureAtPixel(evt.pixel,(feature, layer)=>{
@@ -188,72 +227,136 @@
       const members = feature.get('features')||[];
       if(members.length>1){
         const ex=ol.extent.createEmpty(); members.forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
-        map.getView().fit(ex,{duration:250,maxZoom:17,padding:[24,24,24,24]});
+        map.getView().fit(ex,{duration:250,maxZoom:17,padding:[30,380,30,30]}); // 좌측 패널 여백
       }else if(members.length===1){
         const f=members[0], coord=f.getGeometry().getCoordinates();
         openPopupForFeature(f, coord);
+        highlightList(f.get('__id'));
       }
       handled=true; return true;
     },{hitTolerance:6});
     if(!handled) closePopup();
   });
 
-  /* ===== 더미 생성 ===== */
-  function generateDummyAround(lng, lat, n=DEMO_N, radiusKm=RADIUS_KM){
-    const feats=[];
+  /* ===== 거리/더미/리스트 ===== */
+  function haversineKm(a,b){
+    const R=6371,toRad=d=>d*Math.PI/180;
+    const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+    const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
+    const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+    return 2*R*Math.asin(Math.sqrt(t));
+  }
+  function generateDummyAround(lng, lat, n=DEMO_N, rKm=RADIUS_KM){
+    const types=['노상','노외','부설'];
+    const rows=[];
     for(let i=0;i<n;i++){
-      const rkm=Math.random()*radiusKm, ang=Math.random()*Math.PI*2;
+      const rkm=Math.random()*rKm, ang=Math.random()*Math.PI*2;
       const dLat=(rkm/111)*Math.sin(ang);
       const dLng=(rkm/(111*Math.cos(lat*Math.PI/180)))*Math.cos(ang);
       const y=lat+dLat, x=lng+dLng;
-      const c3857=ol.proj.fromLonLat([x,y]);
-      const f=new ol.Feature({ geometry:new ol.geom.Point(c3857), nm:`더미 주차장 ${i+1}`, lng:x, lat:y });
-      f.setStyle(stylePark);
-      feats.push(f);
+      const type = types[i%3];
+      rows.push({ id:'DM-'+i, nm:`더미 ${type} 주차장 ${i+1}`, addr:`반경 ${rkm.toFixed(2)}km`, type, lng:x, lat:y });
     }
-    return feats;
+    return rows.map(r=>({ ...r, distKm: haversineKm({lng,lat},{lng:r.lng,lat:r.lat}) }));
   }
 
-  /* ===== 현재위치/반경 원/더미 시드 ===== */
-  function setMeAndSeed(lng, lat, msg){
-    meSrc.clear();
-    // 현재위치 마커
-    const c = ol.proj.fromLonLat([lng,lat]);
-    const me = new ol.Feature({ geometry: new ol.geom.Point(c) });
-    me.setStyle(styleMe);
-    meSrc.addFeature(me);
-
-    // 반경 원(미터)
-    const circle = new ol.Feature({ geometry: new ol.geom.Circle(c, RADIUS_KM * 1000) });
-    circle.setStyle(styleCircle);
-    meSrc.addFeature(circle);
-
-    // 더미
+  function rebuildFeatures(rows){
     rawSrc.clear();
-    const t0=performance.now();
-    rawSrc.addFeatures(generateDummyAround(lng, lat, DEMO_N, RADIUS_KM));
-    const dt=(performance.now()-t0).toFixed(0);
+    const feats = rows.map(r=>{
+      const coord=ol.proj.fromLonLat([r.lng,r.lat]);
+      const f=new ol.Feature({ geometry:new ol.geom.Point(coord), __id:r.id, ...r });
+      f.setStyle(stylePark);
+      return f;
+    });
+    rawSrc.addFeatures(feats);
+  }
+
+  /* ===== 좌측 목록 ===== */
+  let ROWS_ALL=[], ROWS_VIEW=[], currentType="";
+  function buildList(rows){
+    const listEl=$('#list'), countEl=$('#count');
+    countEl.textContent = String(rows.length);
+    if(rows.length===0){
+      listEl.innerHTML = `<div class="item"><div class="nm">결과 없음</div><div class="sub">반경 ${RADIUS_KM}km / 형태: ${currentType||'전체'}</div></div>`;
+      return;
+    }
+    listEl.innerHTML = rows.map((r,i)=>`
+      <div class="item" data-id="${r.id}" role="option" tabindex="0">
+        <div class="nm">${i+1}. ${r.nm}</div>
+        <div class="sub"><span class="badge">${r.type}</span><span class="dist">${r.distKm.toFixed(2)} km</span><span>${r.addr}</span></div>
+      </div>`).join('');
+    listEl.querySelectorAll('.item').forEach(el=>{
+      el.addEventListener('click', ()=> focusItem(el.dataset.id));
+      el.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ focusItem(el.dataset.id); e.preventDefault(); }});
+    });
+  }
+  function highlightList(id){
+    $('#list').querySelectorAll('.item').forEach(el=> el.classList.toggle('active', el.dataset.id===id));
+  }
+  function focusItem(id){
+    const r = ROWS_VIEW.find(x=>x.id===id) || ROWS_ALL.find(x=>x.id===id);
+    if(!r) return;
+    const coord=ol.proj.fromLonLat([r.lng,r.lat]);
+    map.getView().setCenter(coord); map.getView().setZoom(16);
+    openPopupForFeature(new ol.Feature({geometry:new ol.geom.Point(coord), ...r}), coord);
+    highlightList(id);
+  }
+  function applyFilter(){
+    ROWS_VIEW = ROWS_ALL.filter(r=>!currentType || r.type===currentType).sort((a,b)=>a.distKm-b.distKm);
+    buildList(ROWS_VIEW);
+    rebuildFeatures(ROWS_VIEW);
+  }
+
+  $('#typeBar').addEventListener('click', (e)=>{
+    const chip=e.target.closest('.chip'); if(!chip) return;
+    chip.parentElement.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    currentType = chip.dataset.type || "";
+    closePopup();
+    applyFilter();
+  });
+
+  /* ===== 현재 위치/반경 원/시드 ===== */
+  function setMeAndSeed(lng, lat, msg){
+    // 현재 위치 + 반경
+    meSrc.clear();
+    const center = ol.proj.fromLonLat([lng,lat]);
+    const me = new ol.Feature({ geometry:new ol.geom.Point(center) }); me.setStyle(styleMe); meSrc.addFeature(me);
+    const circle = new ol.Feature({ geometry:new ol.geom.Circle(center, RADIUS_KM*1000) }); circle.setStyle(styleCircle); meSrc.addFeature(circle);
+
+    // 더미/리스트
+    ROWS_ALL = generateDummyAround(lng, lat, DEMO_N, RADIUS_KM);
+    applyFilter();
 
     // 뷰
-    map.getView().setCenter(c);
-    map.getView().setZoom(15);
-
-    ok(`${msg} · 반경 ${RADIUS_KM}km · 더미 ${DEMO_N}개 (${dt}ms)`);
+    map.getView().setCenter(center); map.getView().setZoom(15);
+    ok(`${msg} · 반경 ${RADIUS_KM}km · 더미 ${DEMO_N}개`);
   }
 
-  /* ===== 자동 현재위치 (HTTPS 필요) ===== */
-  (function autoLocate(){
+  function fitAll(){
+    const ex=ol.extent.createEmpty();
+    meSrc.getFeatures().forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
+    rawSrc.getFeatures().forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
+    if(!ol.extent.isEmpty(ex)) map.getView().fit(ex,{duration:400, padding:[30,380,30,30], maxZoom:16});
+  }
+
+  $('#locBtn').addEventListener('click', ()=> autoLocate(true));
+  $('#fitBtn').addEventListener('click', fitAll);
+
+  function autoLocate(fly=false){
     const isSecure = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
     const fallback = ()=> setMeAndSeed(INIT.lng, INIT.lat, '위치 실패 → 김천 기준');
     if(!isSecure || !navigator.geolocation){ warn('비보안/미지원 환경 · 김천 기준'); fallback(); return; }
-
     let fixed=false;
     const opts={ enableHighAccuracy:true, maximumAge:5000, timeout:9000 };
-    const apply=(lng,lat)=>{ if(fixed) return; fixed=true; setMeAndSeed(lng,lat,'현재 위치 기준'); };
-
+    const apply=(lng,lat)=>{ if(fixed) return; fixed=true; setMeAndSeed(lng,lat,'현재 위치 기준'); if(fly){ map.getView().animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); } };
     const wid=navigator.geolocation.watchPosition(p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },()=>{},opts);
     navigator.geolocation.getCurrentPosition(p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); }, fallback, opts);
-  })();
+  }
+
+  /* ===== 시작 ===== */
+  autoLocate(false); // 자동 현재위치 시도 → 실패 시 김천 폴백
+
 })();
 </script>
 </body>
