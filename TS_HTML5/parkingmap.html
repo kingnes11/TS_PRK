@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>브이월드 WMTS(베이스) · 더미1000 · 리스트/필터 · 오류로그(FAB) · OL 10.6.1</title>
+<title>브이월드 WMTS + 경계 WMS · 리스트/필터 · 오류로그(FAB) · OL 10.6.1</title>
 
 <!-- ✅ OpenLayers 동적 로더: 10.6.1 (로컬 → CDN 폴백) -->
 <script>
@@ -101,7 +101,7 @@
   .ol-popup .sub2{color:#4b5563;font-size:.9rem}
   .ol-popup .x{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#6b7280;font-size:18px;cursor:pointer;line-height:1}
 
-  /* 오류 로그 도크 + FAB (반드시 보이게) */
+  /* 오류 로그 도크 + FAB */
   .errdock{
     position:fixed; right:12px; bottom:68px; z-index:1000;
     width:min(560px, calc(100% - 24px));
@@ -147,21 +147,32 @@
     <div>주차장(반경 <b id="radiusLabel">5</b>km)</div>
     <div class="muted" style="margin-left:auto">총 <b id="count">0</b>곳 · 선택: <b id="sel">-</b></div>
   </div>
+
   <div class="row">
     <button class="btn" id="locBtn">현재 위치</button>
     <button class="btn ghost" id="fitBtn">전체 보기</button>
     <span id="stat" class="muted" style="margin-left:auto">초기화 중…</span>
   </div>
+
   <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
     <div class="chip active" data-type="">전체</div>
     <div class="chip" data-type="노상">노상</div>
     <div class="chip" data-type="노외">노외</div>
     <div class="chip" data-type="부설">부설</div>
   </div>
+
+  <!-- ★ 행정경계 토글 -->
+  <div class="row" id="admToggles" style="gap:14px">
+    <div class="muted" style="margin-right:4px">경계</div>
+    <label class="muted"><input id="admSido" type="checkbox" checked> 시도</label>
+    <label class="muted"><input id="admSigg" type="checkbox" checked> 시군구</label>
+    <label class="muted"><input id="admEmd"  type="checkbox" checked> 읍면동</label>
+  </div>
+
   <div id="list" class="list" role="listbox" aria-label="주차장 목록"></div>
 </aside>
 
-<!-- 오류 로그 도크 + FAB (없어도 JS가 자동 생성하지만, 기본 제공) -->
+<!-- 오류 로그 도크 + FAB -->
 <section class="errdock" id="errdock" aria-label="오류 로그">
   <div class="hdr">
     <div class="title">오류 로그</div>
@@ -272,7 +283,7 @@
     const vwBase = new ol.layer.Tile({
       source: new ol.source.XYZ({
         url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
-        maxZoom: 20,    // ★ Base 최대 줌
+        maxZoom: 18,    // ★ Base 최대 줌
         minZoom: 5
       }),
       zIndex: 0, visible: true
@@ -303,6 +314,45 @@
       logErr('WMTS tile load error', key);
       switchToOSM('tileloaderror');
     });
+
+    /* ===== 행정경계선 WMS (시도/시군구/읍면동) ===== */
+    const VW_WMS = `https://api.vworld.kr/req/wms?key=${VW_KEY}&domain=${DOMAIN}`;
+    function makeAdmWMS(layerName, zIndex){
+      const layer = new ol.layer.Tile({
+        source: new ol.source.TileWMS({
+          url: VW_WMS,
+          params: {
+            SERVICE: 'WMS',
+            VERSION: '1.3.0',
+            REQUEST: 'GetMap',
+            LAYERS: layerName,
+            STYLES: layerName,   // 서버 권장 스타일
+            FORMAT: 'image/png',
+            TRANSPARENT: true,
+            CRS: 'EPSG:3857',
+            TILED: true
+          },
+          crossOrigin: 'anonymous'
+        }),
+        opacity: 0.9,
+        visible: true,
+        zIndex
+      });
+      layer.getSource().on('tileloaderror', () => {
+        logErr(`WMS ${layerName} tile error`);
+        layer.setVisible(false);
+      });
+      return layer;
+    }
+    const wmsSido = makeAdmWMS('lt_c_adsido', 201);
+    const wmsSigg = makeAdmWMS('lt_c_adsigg', 202);
+    const wmsEmd  = makeAdmWMS('lt_c_ademd',  203);
+    map.addLayer(wmsSido); map.addLayer(wmsSigg); map.addLayer(wmsEmd);
+
+    // UI 토글
+    $('#admSido').addEventListener('change', e => wmsSido.setVisible(e.target.checked));
+    $('#admSigg').addEventListener('change', e => wmsSigg.setVisible(e.target.checked));
+    $('#admEmd') .addEventListener('change', e => wmsEmd .setVisible(e.target.checked));
 
     /* ---- 아이콘/스타일 ---- */
     const PARK_SVG =
