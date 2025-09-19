@@ -3,80 +3,78 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Parking Map · 김천시(한국교통안전공단 중심 · 실시간 POI)</title>
+<title>김천시 주차장 지도 · 클러스터링</title>
 
-<!-- 브이월드 2D 지도 API (apiKey 뒤 공백 금지) -->
-<script type="text/javascript" src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
+<!-- VWorld 2D API (도메인 등록 必) -->
+<script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
+
 <style>
   :root{
     --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
-    --accent:#3b82f6; --accent-2:#2563eb; --ring:rgba(59,130,246,.35);
+    --accent:#2563eb; --accent2:#1d4ed8; --ok:#10b981; --ring:rgba(59,130,246,.35);
     --border:#20304f;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
-  body{ margin:0; background:var(--bg); color:var(--text);
-    font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif; }
-  header{ position:fixed; top:0; inset-inline:0; z-index:10;
-    background:linear-gradient(180deg,#0b1220cc,#0b122000);
-    padding:10px 12px; display:flex; gap:8px; align-items:center; }
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
+  #map{position:fixed;inset:0}
+  header{position:fixed;inset-inline:0;top:0;z-index:10;padding:10px 12px;
+    background:linear-gradient(180deg,#0b1220cc,#0b122000);display:flex;gap:8px;align-items:center}
   header .title{font-weight:700}
-  header .pill{ margin-left:auto; display:flex; gap:6px; align-items:center; font-size:.9rem; color:var(--muted) }
-  #map{ position:fixed; inset:0; }
+  header .pill{margin-left:auto;color:var(--muted);font-size:.9rem}
+  .panel{position:fixed;left:12px;right:12px;bottom:12px;z-index:20;display:grid;gap:8px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;box-shadow:0 4px 24px rgba(0,0,0,.35)}
+  .controls{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px}
+  .control{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+  .control:focus-within{outline:3px solid var(--ring);outline-offset:1px}
+  input,select{width:100%;border:0;outline:0;background:transparent;color:var(--text);font-size:1rem}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .btn{border:0;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700;
+    background:linear-gradient(180deg,var(--accent),var(--accent2));color:#fff}
+  .btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--border)}
+  .hint{color:var(--muted);font-size:.85rem}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;z-index:30;background:#111827;color:#fff;
+    border:1px solid #374151;padding:10px 12px;border-radius:10px;display:none}
 
-  .panel{ position:fixed; left:12px; right:12px; bottom:12px; z-index:20; display:grid; gap:8px; }
-  .card{ background:var(--card); border:1px solid var(--border); border-radius:14px; padding:10px; box-shadow: 0 4px 24px rgba(0,0,0,.35); }
-  .controls{ display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
-  @media (min-width: 720px){ .controls{ grid-template-columns: 2fr 1fr 1fr 1fr } }
-  .control{ display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:12px; padding:10px 12px; background:transparent; }
-  .control:focus-within{ outline:3px solid var(--ring); outline-offset:1px }
-  select,input{ width:100%; border:0; outline:0; background:transparent; color:var(--text); font-size:1rem }
-  .btns{ display:flex; gap:8px; flex-wrap:wrap }
-  .btn{ border:0; border-radius:12px; padding:10px 14px; cursor:pointer; font-weight:700;
-    background:linear-gradient(180deg,var(--accent),var(--accent-2)); color:#fff; }
-  .btn.ghost{ background:transparent; color:var(--accent); border:1px solid var(--border) }
-  .hint{ color:var(--muted); font-size:.85rem }
-  .toast{ position:fixed; left:50%; transform:translateX(-50%); bottom:88px; z-index:30; background:#111827; color:#fff;
-    border:1px solid #374151; padding:10px 12px; border-radius:10px; display:none; }
+  /* 팝업 */
+  .ol-popup{position:absolute;background:#111827;color:#e5e7eb;padding:8px 10px;border:1px solid #374151;border-radius:10px;
+    min-width:160px;transform:translate(-50%,-110%);pointer-events:none}
+  .ol-popup .tit{font-weight:700}
+  .ol-popup .sub{color:#9ca3af;font-size:.9rem}
 </style>
 </head>
 <body>
-  <div id="map" role="application" aria-label="브이월드 2D 지도"></div>
+  <div id="map" aria-label="브이월드 2D 지도"></div>
 
   <header>
-    <div class="title">주차장 지도 · 김천시(한국교통안전공단 중심)</div>
-    <div class="pill"><span id="count">0</span>곳 표시</div>
+    <div class="title">주차장 지도 · 김천시(클러스터)</div>
+    <div class="pill"><span id="count">0</span>개 장소</div>
   </header>
 
   <div class="panel">
     <div class="card">
-      <div class="controls" role="search">
-        <div class="control"><input id="q" type="search" placeholder="주차장명 검색 (예: 혁신도시)" aria-label="주차장명 검색" /></div>
+      <div class="controls">
+        <div class="control"><input id="q" type="search" placeholder="주차장명 검색 (예: 혁신도시)" /></div>
         <div class="control">
-          <select id="type" aria-label="주차장형태">
+          <select id="type">
             <option value="">형태(전체)</option>
-            <option value="노상">노상</option>
-            <option value="노외">노외</option>
-            <option value="부설">부설</option>
+            <option>노상</option><option>노외</option><option>부설</option>
           </select>
         </div>
         <div class="control">
-          <select id="sido" aria-label="시도">
-            <option value="경상북도">경상북도</option>
-          </select>
-        </div>
-        <div class="control">
-          <select id="sigungu" aria-label="시군구">
-            <option value="김천시">김천시</option>
+          <select id="distance">
+            <option value="40">클러스터 간격(기본)</option>
+            <option value="20">20 (촘촘)</option>
+            <option value="60">60 (성김)</option>
           </select>
         </div>
       </div>
-      <div class="btns" style="margin-top:8px">
+      <div class="btns">
         <button class="btn" id="fitBtn">전체 보기</button>
         <button class="btn ghost" id="tsBtn">TS 본사로</button>
         <button class="btn ghost" id="locBtn">내 위치</button>
         <button class="btn ghost" id="resetBtn">초기화</button>
-        <span class="hint">VWorld 검색 API로 김천시 '주차장' 실시간 로드</span>
+        <span class="hint">※ 브이월드 키/도메인이 일치해야 API 정상 호출</span>
       </div>
     </div>
   </div>
@@ -84,33 +82,47 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* =========================
-   0) 설정값
-   ========================= */
-const VWORLD_KEY = (function(){
-  // map script의 쿼리에서 apiKey 추출 (동일 키로 search API 호출)
-  try{
-    const s = Array.from(document.scripts).find(x => x.src && x.src.includes('vworldMapInit.js.do'));
-    const u = new URL(s.src); return u.searchParams.get('apiKey');
-  }catch(e){ return ''; }
-})();
+/* --------------------------
+   0) 상수/유틸
+--------------------------- */
+const VWORLD_KEY = "CF9A371B-35A6-3822-8315-6592C8342E82";
+const VWORLD_DOMAIN = location.hostname;
+const GIMCHEON_CENTER = { lng:128.1136, lat:36.1398 }; // 김천시 중심 근사
+const GIMCHEON_RADIUS_M = 15000; // 15km 반경
+let TS_COORD = { lng:128.1765, lat:36.1219 }; // 한국교통안전공단(근사)
 
-// 김천시 대략 중심 및 반경(미터)
-const GIMCHEON_CENTER = { lng: 128.1136, lat: 36.1398 }; // 김천시 중심 근사
-const GIMCHEON_RADIUS_M = 15000; // 15km 반경으로 김천시 커버
-
-// TS 본사(한국교통안전공단) 주소 키워드
-const TS_QUERY = "한국교통안전공단 김천시";
-
-/* =========================
-   1) 지도 & 마커 레이어
-   ========================= */
-let vmap, markerLayer;
-const featureIndex = new Map();
 const $ = (s)=>document.querySelector(s);
 const countEl = $('#count');
+const toast = $('#toast');
+
+function showToast(msg, ms=2600){
+  toast.textContent = msg; toast.style.display='block';
+  clearTimeout(showToast._t); showToast._t = setTimeout(()=> toast.style.display='none', ms);
+}
+
+function km(a,b){ // Haversine (km)
+  const R=6371,toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
+  const t=s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+  return 2*R*Math.asin(Math.sqrt(t));
+}
+
+/* --------------------------
+   1) 지도 생성
+--------------------------- */
+let vmap;           // vw.ol3.Map
+let vectorSrc;      // ol.source.Vector (원본 포인트)
+let clusterSrc;     // ol.source.Cluster
+let clusterLayer;   // ol.layer.Vector
+let overlay;        // 팝업
 
 function initMap(){
+  if(!(window.vw && vw.ol3 && window.ol)){
+    showToast('VWorld 라이브러리를 불러오지 못했습니다. (apiKey/domain 확인)');
+    return;
+  }
+
   vw.ol3.MapOptions = {
     basemapType: vw.ol3.BasemapType.GRAPHIC,
     controlDensity: vw.ol3.DensityType.EMPTY,
@@ -120,206 +132,228 @@ function initMap(){
     initPosition: vw.ol3.CameraPosition
   };
   vmap = new vw.ol3.Map("map", vw.ol3.MapOptions);
-  markerLayer = new vw.ol3.layer.Marker(vmap);
-  vmap.addLayer(markerLayer);
 
-  // 기본 중심을 김천시 근사로
-  const center900913 = ol.proj.transform([GIMCHEON_CENTER.lng, GIMCHEON_CENTER.lat], 'EPSG:4326', 'EPSG:900913');
-  vmap.getView().setCenter(center900913);
+  // 초기 중심/줌
+  const c = ol.proj.transform([GIMCHEON_CENTER.lng, GIMCHEON_CENTER.lat], 'EPSG:4326', 'EPSG:900913');
+  vmap.getView().setCenter(c);
   vmap.getView().setZoom(12);
 
-  vmap.on('pointermove', function(evt){
-    vmap.getTargetElement().style.cursor = vmap.forEachFeatureAtPixel(evt.pixel, (f, layer)=>{
-      return (layer && layer.className === 'vw.ol3.layer.Marker') ? 'pointer' : null;
-    }) ? 'pointer' : '';
+  // 벡터 + 클러스터 소스/레이어
+  vectorSrc = new ol.source.Vector({ features: [] });
+  clusterSrc = new ol.source.Cluster({ distance: 40, minDistance: 10, source: vectorSrc });
+  clusterLayer = new ol.layer.Vector({
+    source: clusterSrc,
+    style: clusterStyle
+  });
+
+  // 레이어 추가 (vmap.addLayer 또는 내부 ol.Map에 추가)
+  try { vmap.addLayer(clusterLayer); }
+  catch(e){
+    try { (vmap.getMap ? vmap.getMap() : vmap.map).addLayer(clusterLayer); }
+    catch(e2){ console.error(e2); showToast('레이어 추가 실패'); }
+  }
+
+  // 팝업 오버레이
+  const el = document.createElement('div');
+  el.className = 'ol-popup';
+  overlay = new ol.Overlay({ element: el, positioning: 'bottom-center', stopEvent: false, offset: [0, -12] });
+  (vmap.addOverlay ? vmap.addOverlay(overlay) : (vmap.getMap ? vmap.getMap() : vmap.map).addOverlay(overlay));
+
+  // 클릭: 클러스터는 확대, 단일은 팝업
+  vmap.on('click', function(evt){
+    let handled = false;
+    vmap.forEachFeatureAtPixel(evt.pixel, function(feature, layer){
+      if(layer !== clusterLayer) return;
+      const members = feature.get('features') || [];
+      if(members.length > 1){
+        const extent = ol.extent.createEmpty();
+        members.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
+        vmap.getView().fit(extent, { duration: 300, maxZoom: 17, padding: [80,20,80,20] });
+      }else if(members.length === 1){
+        const f = members[0];
+        const props = f.getProperties();
+        overlay.setPosition(evt.coordinate);
+        overlay.getElement().innerHTML =
+          `<div class="tit">${props.nm || '주차장'}</div><div class="sub">${props.addr||''}</div>`;
+      }
+      handled = true;
+      return true;
+    });
+    if(!handled) overlay.setPosition(undefined);
   });
 }
 
-function clearMarkers(){
-  markerLayer.removeAll(); featureIndex.clear();
+function clusterStyle(feature){
+  const size = (feature.get('features')||[]).length;
+  if(size > 1){
+    // 파란 원 + 숫자
+    return new ol.style.Style({
+      image: new ol.style.Circle({
+        radius: Math.max(12, Math.min(28, 10 + Math.log(size)*8)),
+        fill: new ol.style.Fill({ color: [37,99,235,0.85] }),
+        stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
+      }),
+      text: new ol.style.Text({
+        text: String(size),
+        fill: new ol.style.Fill({ color: '#ffffff' }),
+        stroke: new ol.style.Stroke({ color: '#000000', width: 3 })
+      })
+    });
+  }
+  // 단일 포인트: 초록 원
+  return new ol.style.Style({
+    image: new ol.style.Circle({
+      radius: 7,
+      fill: new ol.style.Fill({ color: [16,185,129,0.9] }),
+      stroke: new ol.style.Stroke({ color: '#ffffff', width: 2 })
+    })
+  });
 }
 
-function addMarker(r){
-  const opt = {
-    x: r.lng, y: r.lat, epsg: "EPSG:4326",
-    title: r.nm,
-    contents: `<strong>${r.nm}</strong><br>${r.addr ?? ""}<br><em>${r.type ?? ""}</em>`,
-    iconUrl: "https://map.vworld.kr/images/ol3/marker_blue.png",
-    text: { text: r.type || "주차장", offsetY: 24, fill:{color:"#000"}, stroke:{color:"#fff", width:2} },
-    attr: { id: r.id || r.nm, type: r.type || "주차장", name: r.nm }
-  };
-  const f = markerLayer.addMarker(opt);
-  featureIndex.set(opt.attr.id, f);
+/* --------------------------
+   2) 데이터 로드 (VWorld 검색 API)
+--------------------------- */
+async function vworldPlaceSearch(query, page=1, size=100){
+  const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0`
+            + `&format=json&errorformat=json&crs=EPSG:4326&type=place`
+            + `&size=${size}&page=${page}&key=${encodeURIComponent(VWORLD_KEY)}`
+            + `&domain=${encodeURIComponent(VWORLD_DOMAIN)}`
+            + `&query=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('VWorld 요청 실패');
+  const json = await res.json();
+  if(json.response && json.response.status === 'OK') return json.response.result.items || [];
+  return [];
+}
+
+let RAW = []; // {nm, lng, lat, addr, type} 배열
+
+async function loadGimcheonParking(){
+  try{
+    let items = [];
+    items = items.concat(await vworldPlaceSearch('김천시 주차장',1,100));
+    items = items.concat(await vworldPlaceSearch('김천 주차',1,100));
+
+    const center=GIMCHEON_CENTER, filtered=[], seen=new Set();
+    for(const it of items){
+      const lng = Number(it.point?.x), lat = Number(it.point?.y);
+      if(!isFinite(lng)||!isFinite(lat)) continue;
+      const d = km({lng:center.lng,lat:center.lat},{lng,lat})*1000;
+      if(d > GIMCHEON_RADIUS_M) continue;
+      const title = String(it.title||'');
+      const road  = it.address?.road || it.address?.parcel || '';
+      if(!(/김천/.test(road)||/김천/.test(title))) continue;
+      if(!(/주차/.test(road)||/주차/.test(title))) continue;
+      const key = `${title}@${lng.toFixed(6)},${lat.toFixed(6)}`;
+      if(seen.has(key)) continue; seen.add(key);
+      filtered.push({ id:key, nm:title, lng, lat, addr:road, type:'주차장' });
+    }
+    RAW = filtered;
+  }catch(e){
+    console.warn('검색 실패, 데모 사용', e);
+    RAW = [
+      {id:'TS-DEMO', nm:'TS 본사 제1주차장(데모)', lng:128.1765, lat:36.1219, addr:'김천시 혁신6로 17', type:'부설'},
+      {id:'KTX-DEMO', nm:'김천(구미)역 공영주차장(데모)', lng:128.1842, lat:36.1127, addr:'김천시 남면 혁신1로 51', type:'노외'},
+      {id:'CITY-DEMO', nm:'김천시청 공영주차장(데모)', lng:128.1170, lat:36.1305, addr:'김천시 시청1길 1', type:'노외'}
+    ];
+  }
+  rebuildFeatures(RAW);
+  // TS 본사 좌표 갱신 시도 (있으면 덮어씀)
+  try{
+    const ts = await vworldPlaceSearch('한국교통안전공단 김천시',1,10);
+    const item = ts.find(x => /한국교통안전공단/.test(x.title||""));
+    if(item) TS_COORD = { lng:Number(item.point.x), lat:Number(item.point.y) };
+  }catch(e){}
+}
+
+/* --------------------------
+   3) 피처/클러스터 재구성
+--------------------------- */
+function rebuildFeatures(rows){
+  if(!vectorSrc) return;
+  const feats = rows.map(r=>{
+    const coord = ol.proj.transform([r.lng, r.lat], 'EPSG:4326', 'EPSG:900913');
+    const f = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+    f.setProperties({ nm:r.nm, addr:r.addr, type:r.type, lng:r.lng, lat:r.lat });
+    return f;
+  });
+  vectorSrc.clear();
+  vectorSrc.addFeatures(feats);
+  // 전체 범위 맞춤
+  fitAll();
+  // 카운트는 원본 개수 기준
+  countEl.textContent = rows.length;
 }
 
 function fitAll(){
   const extent = ol.extent.createEmpty(); let any=false;
-  markerLayer.getSource().getFeatures().forEach(f=>{
-    const coord = f.getGeometry().getCoordinates();
-    ol.extent.extend(extent, ol.extent.boundingExtent([coord])); any=true;
-  });
-  if(any){ vmap.getView().fit(extent, {duration:500, padding:[80,20,220,20], maxZoom:16}); }
+  vectorSrc.getFeatures().forEach(f=>{ ol.extent.extend(extent, f.getGeometry().getExtent()); any=true; });
+  if(any) vmap.getView().fit(extent, {duration:500, padding:[80,20,220,20], maxZoom:16});
 }
 
-/* =========================
-   2) 검색 API (장소 PLACE)
-   ========================= */
-async function vworldPlaceSearch(query, page=1, size=100){
-  const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0`+
-              `&format=json&errorformat=json&crs=EPSG:4326&type=place`+
-              `&size=${size}&page=${page}&key=${encodeURIComponent(VWORLD_KEY)}`+
-              `&query=${encodeURIComponent(query)}`;
-  const res = await fetch(url);
-  if(!res.ok) throw new Error('VWorld 요청 실패');
-  const json = await res.json();
-  if(json.response && json.response.status === 'OK'){
-    return json.response.result.items || [];
-  }
-  return [];
-}
+/* --------------------------
+   4) UI
+--------------------------- */
+const q = $('#q'), typeSel = $('#type'), distSel = $('#distance');
 
-function km(a,b){ // Haversine km
-  const R=6371, toRad=(d)=>d*Math.PI/180;
-  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
-  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
-  const t=s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
-  return 2*R*Math.asin(Math.sqrt(t));
-}
-
-async function loadGimcheonParking(){
-  clearMarkers();
-  let items = [];
-  try{
-    // 김천시 주차장 검색
-    const r1 = await vworldPlaceSearch('김천시 주차장', 1, 100);
-    items = items.concat(r1);
-    // 보강: '주차' 키워드 + 김천
-    const r2 = await vworldPlaceSearch('김천 주차', 1, 100);
-    items = items.concat(r2);
-  }catch(e){
-    showToast('VWorld 검색 실패: 데모 데이터로 대체합니다.');
-    // 데모 백업 (TS/역/시청 근처)
-    items = [
-      {title:"TS 본사 제1주차장(데모)", point:{x:128.1765, y:36.1219}, address:{road:"김천시 혁신6로 17"}, category:"주차장"},
-      {title:"김천(구미)역 공영주차장(데모)", point:{x:128.1842, y:36.1127}, address:{road:"김천시 남면 혁신1로 51"}, category:"주차장"},
-      {title:"김천시청 공영주차장(데모)", point:{x:128.1170, y:36.1305}, address:{road:"김천시 시청1길 1"}, category:"주차장"}
-    ];
-  }
-
-  // 필터: 김천시 범위(반경) + 주차 관련 명칭
-  const center = GIMCHEON_CENTER;
-  const filtered = [];
-  const seen = new Set();
-  for(const it of items){
-    const lng = Number(it.point?.x), lat = Number(it.point?.y);
-    if(!isFinite(lng) || !isFinite(lat)) continue;
-    const d = km({lng:center.lng, lat:center.lat}, {lng, lat})*1000;
-    if(d > GIMCHEON_RADIUS_M) continue;
-
-    const title = String(it.title || '');
-    const road = it.address?.road || it.address?.parcel || '';
-    const nameOk = /주차/.test(title) || /주차/.test(road);
-    // 김천 포함 여부 (주소에 김천 또는 행정구에 '김천시' 표시)
-    const addrOk = /김천/.test(road) || /김천/.test(title);
-    if(nameOk && addrOk){
-      const key = `${title}@${lng.toFixed(6)},${lat.toFixed(6)}`;
-      if(seen.has(key)) continue;
-      seen.add(key);
-      filtered.push({
-        id: key, nm: title, lng, lat, addr: road, type: '주차장'
-      });
-    }
-  }
-
-  // 마커 추가
-  filtered.forEach(addMarker);
-  countEl.textContent = filtered.length;
-  fitAll();
-
-  // TS 본사 좌표 갱신 (가능하면 검색으로)
-  try{
-    const ts = await vworldPlaceSearch(TS_QUERY, 1, 10);
-    const item = ts.find(x => /한국교통안전공단/.test(x.title||""));
-    if(item){
-      TS_COORD = { lng: Number(item.point.x), lat: Number(item.point.y) };
-    }
-  }catch(e){ /* ignore */ }
-}
-
-/* =========================
-   3) TS 본사로 이동 & 내 위치
-   ========================= */
-let TS_COORD = { lng: 128.1765, lat: 36.1219 }; // 초기 근사값
-function flyToTS(){
-  const c = ol.proj.transform([TS_COORD.lng, TS_COORD.lat],'EPSG:4326','EPSG:900913');
-  vmap.getView().setCenter(c); vmap.getView().setZoom(16);
-}
-
-const toast = $('#toast');
-function showToast(msg, ms=2600){
-  toast.textContent = msg;
-  toast.style.display = 'block';
-  clearTimeout(showToast._t);
-  showToast._t = setTimeout(()=> toast.style.display='none', ms);
-}
-
-function useMyLocation(){
-  const secureOK = (location.protocol === 'https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-  if(!secureOK){
-    showToast('내 위치는 HTTPS 또는 localhost에서만 사용 가능합니다.');
-    return;
-  }
-  if(!navigator.geolocation){ showToast('이 기기에서 위치를 지원하지 않습니다.'); return; }
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const {latitude, longitude} = pos.coords;
-    const coord = ol.proj.transform([longitude, latitude], 'EPSG:4326', 'EPSG:900913');
-    vmap.getView().setCenter(coord); vmap.getView().setZoom(16);
-    const style = new ol.style.Style({
-      image: new ol.style.Circle({ radius: 6, fill: new ol.style.Fill({color: [59,130,246,0.9]}),
-        stroke: new ol.style.Stroke({color:[255,255,255,0.9], width:2}) })
-    });
-    const point = new ol.Feature({ geometry: new ol.geom.Point(coord) });
-    point.setStyle(style);
-    if(!window.__meLayer){ window.__meLayer = new ol.layer.Vector({ source: new ol.source.Vector() }); vmap.addLayer(window.__meLayer); }
-    window.__meLayer.getSource().clear();
-    window.__meLayer.getSource().addFeature(point);
-  }, _=> showToast('위치 접근이 거부되었거나 실패했습니다.'), { enableHighAccuracy:true, timeout:8000, maximumAge:10000 });
-}
-
-/* =========================
-   4) 필터 UI
-   ========================= */
-const q = $('#q'), typeSel = $('#type'), sido = $('#sido'), sigungu = $('#sigungu');
-
-function applyFilterText(){
-  // 간단 키워드 필터: 제목 포함 여부
+function applyFilter(){
   const kw = q.value.trim();
-  markerLayer.getSource().getFeatures().forEach(f=>{
-    const name = (f.get('name') || '').toString();
-    const pass = !kw || name.includes(kw);
-    if(pass) markerLayer.showMarker(f); else markerLayer.hideMarker(f);
-  });
-  // 표시 갯수 갱신
-  let visible = 0;
-  markerLayer.getSource().getFeatures().forEach(f=>{ if(!f.get('hidden')) visible++; });
-  countEl.textContent = visible;
+  const t  = typeSel.value;
+  const rows = RAW.filter(r => (!kw || r.nm.includes(kw)) && (!t || r.type===t));
+  rebuildFeatures(rows);
+  overlay && overlay.setPosition(undefined);
+}
+
+function changeClusterDistance(){
+  const d = Number(distSel.value||40);
+  clusterSrc.setDistance(d);
 }
 
 function initUI(){
-  document.getElementById('fitBtn').addEventListener('click', fitAll);
-  document.getElementById('tsBtn').addEventListener('click', flyToTS);
-  document.getElementById('locBtn').addEventListener('click', useMyLocation);
-  document.getElementById('resetBtn').addEventListener('click', ()=>{ q.value=''; applyFilterText(); fitAll(); });
-  q.addEventListener('input', debounce(applyFilterText, 120));
+  $('#fitBtn').addEventListener('click', fitAll);
+  $('#tsBtn').addEventListener('click', ()=>{
+    const c = ol.proj.transform([TS_COORD.lng, TS_COORD.lat],'EPSG:4326','EPSG:900913');
+    vmap.getView().setCenter(c); vmap.getView().setZoom(16);
+  });
+  $('#locBtn').addEventListener('click', useMyLocation);
+  $('#resetBtn').addEventListener('click', ()=>{
+    q.value=''; typeSel.value=''; distSel.value='40'; changeClusterDistance(); rebuildFeatures(RAW);
+  });
+  q.addEventListener('input', debounce(applyFilter, 150));
+  typeSel.addEventListener('change', applyFilter);
+  distSel.addEventListener('change', changeClusterDistance);
 }
 
-function debounce(fn, wait){
-  let t; return function(...args){ clearTimeout(t); t=setTimeout(()=>fn.apply(this,args), wait); }
+function debounce(fn, wait){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), wait); }; }
+
+/* --------------------------
+   5) 내 위치 (HTTPS/localhost)
+--------------------------- */
+function useMyLocation(){
+  const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
+  if(!secureOK){ showToast('내 위치는 HTTPS 또는 localhost에서만 사용 가능합니다.'); return; }
+  if(!navigator.geolocation){ showToast('이 기기에서 위치를 지원하지 않습니다.'); return; }
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const {latitude, longitude} = pos.coords;
+    const coord = ol.proj.transform([longitude, latitude],'EPSG:4326','EPSG:900913');
+    vmap.getView().setCenter(coord); vmap.getView().setZoom(16);
+    // 내 위치 표시(작은 점)
+    const me = new ol.Feature({ geometry:new ol.geom.Point(coord) });
+    me.setStyle(new ol.style.Style({
+      image:new ol.style.Circle({ radius:6,
+        fill:new ol.style.Fill({ color:[59,130,246,0.9] }),
+        stroke:new ol.style.Stroke({ color:[255,255,255,0.9], width:2 })
+      })
+    }));
+    const src = new ol.source.Vector({ features:[me] });
+    const lyr = new ol.layer.Vector({ source: src });
+    (vmap.addLayer ? vmap.addLayer(lyr) : (vmap.getMap? vmap.getMap():vmap.map).addLayer(lyr));
+  }, _=> showToast('위치 접근이 거부되었거나 실패했습니다.'), { enableHighAccuracy:true, timeout:8000, maximumAge:10000 });
 }
 
-/* =========================
-   5) 시작
-   ========================= */
+/* --------------------------
+   6) 시작
+--------------------------- */
 (async function start(){
   initMap();
   initUI();
