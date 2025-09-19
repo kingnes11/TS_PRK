@@ -3,48 +3,59 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>브이월드 WMTS(베이스 전용) · 리스트+필터+더미1000 · 오류로그</title>
+<title>브이월드 WMTS(베이스) · 더미1000 · 리스트/필터 · 오류로그 · OL 10.6.1</title>
 
-<!-- ✅ OpenLayers 동적 로더 (다중 CDN 폴백) -->
+<!-- ✅ OpenLayers 동적 로더: 10.6.1 (로컬 → CDN 폴백) -->
 <script>
 (function(){
-  const cssCDNs = [
-    'https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.css',
-    'https://unpkg.com/ol@6.15.1/ol.css',
-    'https://cdn.jsdelivr.net/npm/ol@6.15.1/ol.css'
+  const basePath = location.pathname.replace(/\/[^/]*$/, '');
+  const localCSS = basePath + '/vendor/ol/10.6.1/ol.css';
+  const localJS  = basePath + '/vendor/ol/10.6.1/ol.js';
+  const repoCSS  = '/TS_PRK/TS_HTML5/vendor/ol/10.6.1/ol.css';
+  const repoJS   = '/TS_PRK/TS_HTML5/vendor/ol/10.6.1/ol.js';
+
+  const cssSrcs = [
+    localCSS, repoCSS,
+    'https://cdnjs.cloudflare.com/ajax/libs/ol/10.6.1/ol.css',
+    'https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css',
+    'https://unpkg.com/ol@10.6.1/ol.css'
   ];
-  const jsCDNs = [
-    'https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.js',
-    'https://unpkg.com/ol@6.15.1/dist/ol.js',
-    'https://cdn.jsdelivr.net/npm/ol@6.15.1/dist/ol.js'
+  const jsSrcs = [
+    localJS, repoJS,
+    'https://cdnjs.cloudflare.com/ajax/libs/ol/10.6.1/ol.js',
+    'https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js',
+    'https://unpkg.com/ol@10.6.1/dist/ol.js'
   ];
 
-  function loadCSS(urls, i=0){
-    if(i>=urls.length) return;
-    const l=document.createElement('link');
-    l.rel='stylesheet'; l.href=urls[i];
-    l.onerror=()=>loadCSS(urls, i+1);
-    document.head.appendChild(l);
+  function loadCSS(list, i=0){
+    if(i>=list.length) return;
+    const link = document.createElement('link');
+    link.rel='stylesheet'; link.href=list[i];
+    link.onerror=()=>loadCSS(list, i+1);
+    document.head.appendChild(link);
   }
-  function loadJS(urls, i, resolve, reject){
-    if(i>=urls.length) return reject(new Error('OpenLayers JS load failed (all CDNs)'));
+  function loadJS(list, i, resolve, reject){
+    if(i>=list.length) return reject(new Error('OpenLayers JS load failed (all sources)'));
     const s=document.createElement('script');
-    s.src=urls[i]; s.defer=false; s.async=false;
-    s.onload=()=>resolve();
-    s.onerror=()=>{ s.remove(); loadJS(urls, i+1, resolve, reject); }
+    s.src=list[i]; s.defer=false; s.async=false; s.crossOrigin='anonymous';
+    let done=false;
+    const next=()=>{ if(done) return; done=true; s.remove(); loadJS(list, i+1, resolve, reject); };
+    s.onload=()=>{ setTimeout(()=>{ (window.ol && typeof ol.Map==='function') ? (done=true, resolve(list[i])) : next(); },0); };
+    s.onerror=next;
     document.head.appendChild(s);
   }
+
+  loadCSS(cssSrcs, 0);
   window.OL_READY = new Promise((resolve,reject)=>{
-    if(window.ol){ resolve(); return; }
-    loadCSS(cssCDNs, 0);
-    loadJS(jsCDNs, 0, resolve, reject);
+    if(window.ol && typeof ol.Map==='function'){ resolve('(preloaded)'); return; }
+    loadJS(jsSrcs, 0, resolve, reject);
   });
 })();
 </script>
 
 <style>
   :root{
-    --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#2563eb; --accent2:#1d4ed8;
+    --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#2563eb;
     --border:#20304f; --chip:#1f2a44; --chipOn:#243a7a;
   }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
@@ -161,7 +172,7 @@
 
 <script>
 (function(){
-  /* ===== 기본 설정/유틸 ===== */
+  /* ===== 기본 설정 ===== */
   const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82'; // 브이월드 키
   const DOMAIN = 'kingnes11.github.io';                    // 콘솔 등록 도메인
   const INIT   = { lng:128.1136, lat:36.1398 };            // 김천(교통안전공단)
@@ -179,23 +190,17 @@
   const logs = []; let autoOpened = false;
   const tstr = ()=> new Date().toLocaleTimeString();
   function appendRow(level, msg, extra){
-    const div = document.createElement('div');
-    div.className = 'logrow';
+    const div = document.createElement('div'); div.className='logrow';
     div.innerHTML = `<span class="time">[${tstr()}]</span><span class="lvl lvl-${level}">${level}</span><span>${msg}</span>` + (extra ? `<div class="muted" style="margin-left:8px;white-space:pre-wrap">${extra}</div>` : '');
-    errBody.appendChild(div);
-    errBody.scrollTop = errBody.scrollHeight;
+    errBody.appendChild(div); errBody.scrollTop = errBody.scrollHeight;
   }
   function log(level, msg, detail){
     const text = typeof detail==='string' ? detail : (detail ? (detail.stack||JSON.stringify(detail)) : '');
     logs.push({t:Date.now(), level, msg, detail:text});
-    appendRow(level, msg, text);
-    errCount.textContent = `${logs.length}건`;
+    appendRow(level, msg, text); errCount.textContent = `${logs.length}건`;
     if(level==='ERR' && !autoOpened){ errDock.classList.add('open'); autoOpened = true; }
   }
-  const logInfo = (m,d)=>log('INFO',m,d);
-  const logWarn = (m,d)=>log('WARN',m,d);
-  const logErr  = (m,d)=>log('ERR', m,d);
-
+  const logInfo=(m,d)=>log('INFO',m,d), logWarn=(m,d)=>log('WARN',m,d), logErr=(m,d)=>log('ERR',m,d);
   $('#errBtn').addEventListener('click', ()=> errDock.classList.toggle('open'));
   $('#closeErr').addEventListener('click', ()=> errDock.classList.remove('open'));
   $('#clearErr').addEventListener('click', ()=> { logs.length=0; errBody.innerHTML=''; errCount.textContent='0건'; });
@@ -203,13 +208,12 @@
     const txt = logs.map(r=>`[${new Date(r.t).toLocaleTimeString()}] ${r.level} ${r.msg}${r.detail?'\n'+r.detail:''}`).join('\n');
     try{ await navigator.clipboard.writeText(txt||'(로그 없음)'); }catch(e){}
   });
-
   window.addEventListener('error', (e)=> logErr('window.onerror: '+e.message, e.error||e));
   window.addEventListener('unhandledrejection', (e)=> logErr('unhandledrejection', e.reason||e));
 
   /* ===== 앱 시작: OpenLayers 로딩 완료 후 실행 ===== */
-  function startApp(){
-    if(!window.ol){ logErr('OpenLayers 전역(ol) 없음', 'CDN 차단/지연 가능'); warn('OpenLayers 로딩 실패'); return; }
+  function startApp(olSrc){
+    ok('OpenLayers 10.6.1 로드 완료'); logInfo('OpenLayers loaded from', olSrc);
 
     /* ---- 브이월드 WMTS(Base) + OSM 폴백 ---- */
     const vwBase = new ol.layer.Tile({
@@ -230,10 +234,8 @@
     let switched = false;
     function switchToOSM(reason){
       if(switched) return; switched = true;
-      vwBase.setVisible(false);
-      osm.setVisible(true);
-      warn(`브이월드 타일 문제(${reason}) → OSM로 전환`);
-      logWarn('OSM fallback activated', reason);
+      vwBase.setVisible(false); osm.setVisible(true);
+      warn(`브이월드 타일 문제(${reason}) → OSM로 전환`); logWarn('OSM fallback activated', reason);
     }
     vwBase.getSource().on('tileloaderror', (evt)=>{
       logErr('WMTS tile load error', evt && evt.tile ? `key=${evt.tile.getKey?.()||''}` : '');
@@ -253,7 +255,6 @@
          <circle cx='19' cy='12' r='5' fill='#fff'/>
          <path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/>
        </svg>`;
-
     const stylePark = new ol.style.Style({
       image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(PARK_SVG), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction', scale:1 })
     });
@@ -298,7 +299,7 @@
     });
     map.addLayer(clusterLy);
 
-    /* ---- 팝업 ---- */
+    /* ---- 팝업/리스트 ---- */
     const popupEl = document.createElement('div');
     popupEl.className='ol-popup';
     popupEl.innerHTML = `<button class="x" aria-label="닫기">×</button><div class="tit"></div><div class="sub2 addr"></div><div class="sub2 meta"></div>`;
@@ -335,7 +336,6 @@
       if(!handled) closePopup();
     });
 
-    /* ---- 거리/더미/리스트 ---- */
     function haversineKm(a,b){
       const R=6371,toRad=d=>d*Math.PI/180;
       const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
@@ -344,8 +344,7 @@
       return 2*R*Math.asin(Math.sqrt(t));
     }
     function generateDummyAround(lng, lat, n=DEMO_N, rKm=RADIUS_KM){
-      const types=['노상','노외','부설'];
-      const rows=[];
+      const types=['노상','노외','부설']; const rows=[];
       for(let i=0;i<n;i++){
         const rkm=Math.random()*rKm, ang=Math.random()*Math.PI*2;
         const dLat=(rkm/111)*Math.sin(ang);
@@ -356,7 +355,6 @@
       }
       return rows.map(r=>({ ...r, distKm: haversineKm({lng,lat},{lng:r.lng,lat:r.lat}) }));
     }
-
     function rebuildFeatures(rows){
       rawSrc.clear();
       const feats = rows.map(r=>{
@@ -439,15 +437,12 @@
       const isSecure = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
       const fallback = ()=> { logWarn('geolocation fallback', '김천 기준'); setMeAndSeed(INIT.lng, INIT.lat, '위치 실패 → 김천 기준'); };
       if(!isSecure || !navigator.geolocation){
-        warn('비보안/미지원 환경 · 김천 기준');
-        logWarn('geolocation unsupported or insecure origin', location.origin);
-        fallback(); return;
+        warn('비보안/미지원 환경 · 김천 기준'); logWarn('geolocation unsupported or insecure origin', location.origin); fallback(); return;
       }
       let done=false;
       const opts={ enableHighAccuracy:true, maximumAge:5000, timeout:9000 };
       const timer = setTimeout(()=>{ if(!done){ warn('위치 응답 지연 · 김천 유지'); logWarn('geolocation timeout'); done=true; } }, 10000);
       const apply=(lng,lat)=>{ if(done) return; done=true; clearTimeout(timer); setMeAndSeed(lng,lat,'현재 위치 기준'); if(fly){ map.getView().animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); } };
-
       const wid=navigator.geolocation.watchPosition(
         p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },
         err=>{ logErr('watchPosition error', `${err.code} ${err.message}`); },
@@ -465,11 +460,18 @@
     autoLocate(false);
   }
 
-  // DOM+OL 준비 후 시작
   function domReady(cb){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', cb); else cb(); }
-  Promise.all([window.OL_READY]).then(()=> domReady(startApp)).catch(err=>{
-    logErr('OpenLayers 로딩 실패', err);
-    warn('OpenLayers 로딩 실패');
+  window.OL_READY.then((src)=> domReady(()=> startApp(src))).catch(err=>{
+    const msg = 'OpenLayers 10.6.1 로딩 실패 (로컬+CDN 모두 실패)';
+    console.error(msg, err); warn(msg);
+    const detail = (err && (err.stack||err.message)) || String(err);
+    const body = `origin=${location.origin}\npath=${location.pathname}\nua=${navigator.userAgent}\nerr=${detail}`;
+    const dock=document.getElementById('errdock'); dock.classList.add('open');
+    const bodyEl=document.getElementById('errbody');
+    const div=document.createElement('div'); div.className='logrow';
+    div.innerHTML = `<span class="time">[${new Date().toLocaleTimeString()}]</span><span class="lvl lvl-ERR">ERR</span><span>${msg}</span><div class="muted" style="white-space:pre-wrap">${body}</div>`;
+    bodyEl.appendChild(div);
+    document.getElementById('errcount').textContent='1건';
   });
 })();
 </script>
