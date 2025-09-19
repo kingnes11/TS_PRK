@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>주차장 지도 · 현재위치 중심 · 좌측 리스트 · 5km 반경</title>
+<title>주차장 지도 · 현재위치 중심 · 좌측 리스트 · 반경 1km · 행정경계</title>
 
-<!-- VWorld 2D API (브이월드 콘솔에 서비스 URL로 도메인 등록 必) -->
+<!-- VWorld 2D API (도메인 등록 必: 제공하신 키/도메인 사용) -->
 <script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
 
 <style>
@@ -19,22 +19,30 @@
   body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
 
   /* 레이아웃: 좌측 리스트 + 우측 지도 */
-  .layout{display:grid; grid-template-columns: 340px 1fr; height:100vh}
-  @media (max-width: 920px){ .layout{ grid-template-columns: 1fr } .side{ position:fixed; z-index:30; left:12px; right:12px; top:12px } .mapwrap{ height:100vh } }
+  .layout{display:grid; grid-template-columns: 360px 1fr; height:100vh}
+  @media (max-width: 960px){
+    .layout{ grid-template-columns: 1fr }
+    .side{ position:fixed; z-index:30; left:12px; right:12px; top:12px }
+    .mapwrap{ height:100vh }
+  }
 
   .side{
-    background:var(--panel); border:1px solid var(--border); border-radius:14px; margin:12px; padding:12px; display:flex; flex-direction:column; gap:10px;
-    max-height: calc(100vh - 24px);
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; margin:12px; padding:12px;
+    display:flex; flex-direction:column; gap:10px; max-height: calc(100vh - 24px);
   }
-  .side .title{ font-weight:800; display:flex; gap:8px; align-items:center; }
-  .side .muted{ color:var(--muted) }
-  .typebar{ display:flex; gap:8px; flex-wrap:wrap; }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+  .title{ font-weight:800; display:flex; gap:8px; align-items:center; }
+  .muted{ color:var(--muted) }
+  .btn{ border:0; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer;
+    background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#fff }
+  .btn.ghost{ background:transparent; color:#c7d2fe; border:1px solid var(--border) }
+  .chipbar{ display:flex; gap:8px; flex-wrap:wrap }
   .chip{
     background:var(--chip); border:1px solid var(--border); color:#c7d2fe;
     padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem;
   }
   .chip.active{ background:var(--chipOn); color:#fff; border-color:transparent }
-  .list{ overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 120px; }
+  .list{ overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height: 140px }
   .item{ padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer; display:grid; gap:4px }
   .item:last-child{ border-bottom:0 }
   .item:hover{ background:rgba(37,99,235,.08) }
@@ -47,16 +55,6 @@
   .mapwrap{ position:relative; }
   #map{ position:absolute; inset:0 }
 
-  .header{
-    position:fixed; top:0; left:0; right:0; z-index:10;
-    padding:10px 14px; display:flex; gap:8px; align-items:center;
-    background:linear-gradient(180deg,#0b1220cc,#0b122000);
-  }
-  .header .pill{ margin-left:auto; color:var(--muted); display:flex; gap:12px; align-items:center; font-size:.95rem }
-  .btn{ border:0; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer;
-    background:linear-gradient(180deg,var(--accent),var(--accent2)); color:#fff }
-  .btn.ghost{ background:transparent; color:#fff; border:1px solid var(--border) }
-
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:40;background:#111827;color:#fff;border:1px solid #374151;padding:10px 12px;border-radius:10px;display:none}
 
   /* 팝업 */
@@ -68,12 +66,20 @@
 </head>
 <body>
   <div class="layout">
-    <!-- 좌측 리스트 패널 -->
+    <!-- 좌측 패널 (버튼과 리스트를 한 곳에 묶어 겹침 제거) -->
     <aside class="side">
-      <div class="title">김천시 주차장 <span class="muted">반경 5km</span></div>
+      <div class="row title">
+        <div>김천시 주차장 <span class="muted">반경 1km</span></div>
+        <div class="muted" style="margin-left:auto">총 <b id="count">0</b>곳 · 선택: <b id="sel">-</b></div>
+      </div>
 
-      <!-- 형태 선택 칩 -->
-      <div class="typebar" id="typeBar" role="group" aria-label="주차장 형태 필터">
+      <div class="row">
+        <button class="btn" id="locBtn">현재 위치</button>
+        <button class="btn ghost" id="fitBtn">전체 보기</button>
+        <button class="btn ghost" id="reloadAdminBtn">행정경계 갱신</button>
+      </div>
+
+      <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
         <div class="chip active" data-type="">전체</div>
         <div class="chip" data-type="노상">노상</div>
         <div class="chip" data-type="노외">노외</div>
@@ -90,16 +96,6 @@
     </main>
   </div>
 
-  <!-- 상단 안내 -->
-  <div class="header">
-    <button class="btn" id="locBtn">현재 위치</button>
-    <button class="btn ghost" id="fitBtn">전체 보기</button>
-    <div class="pill">
-      <span><b id="count">0</b>곳</span>
-      <span>선택: <b id="sel">-</b></span>
-    </div>
-  </div>
-
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -109,15 +105,15 @@
 const VWORLD_KEY    = "CF9A371B-35A6-3822-8315-6592C8342E82";
 const VWORLD_DOMAIN = "psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev";
 
-const GIMCHEON_CENTER = { lng:128.1136, lat:36.1398 }; // 기본 중심(김천시)
-const RADIUS_M = 5000;                                  // ★ 반경 5km
+const BASE_CENTER = { lng:128.1136, lat:36.1398 }; // 기본(김천시)
+const RADIUS_M = 1000;                              // ★ 반경 1km
 const $ = (s)=>document.querySelector(s);
 const countEl = $('#count'), selEl = $('#sel'), toast = $('#toast');
 
-let ORIGIN = { ...GIMCHEON_CENTER }; // 현재 원점(사용자 위치가 들어오면 갱신)
-let currentType = "";                 // ★ 전역에 '한 번만' 선언 (중복 선언 금지)
+let ORIGIN = { ...BASE_CENTER }; // 현재 원점(사용자 위치가 들어오면 갱신)
+let currentType = "";            // '', '노상','노외','부설'
 
-function showToast(msg, ms=2200){
+function showToast(msg, ms=2000){
   toast.textContent = msg; toast.style.display='block';
   clearTimeout(showToast._t); showToast._t=setTimeout(()=>toast.style.display='none', ms);
 }
@@ -128,7 +124,11 @@ function km(a,b){
   const t=s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
   return 2*R*Math.asin(Math.sqrt(t));
 }
-function mToKm(m){ return m/1000 }
+function degBoxAround(lng, lat, kmRadius){
+  const dLat = kmRadius/111;
+  const dLng = kmRadius/(111*Math.cos(lat*Math.PI/180));
+  return [lng-dLng, lat-dLat, lng+dLng, lat+dLat];
+}
 function inferType(name="", category="", addr=""){
   if(/노상/.test(name)||/노상/.test(category)) return "노상";
   if(/노외|공영|타워|주차타워/.test(name)||/노외|공영|타워/.test(category)) return "노외";
@@ -140,7 +140,7 @@ function inferType(name="", category="", addr=""){
    1) 지도/레이어
    ========================= */
 let vmap, vectorSrc, clusterSrc, clusterLayer, overlay;
-let meLayer, radiusLayer;
+let meLayer, radiusLayer, adminLayer; // ★ 행정경계 레이어
 
 function initMap(){
   if(!(window.vw && vw.ol3 && window.ol)){ showToast('VWorld 로드 실패(apiKey/domain 확인)'); return; }
@@ -156,22 +156,26 @@ function initMap(){
   vmap = new vw.ol3.Map("map", vw.ol3.MapOptions);
 
   const c = ol.proj.transform([ORIGIN.lng, ORIGIN.lat], 'EPSG:4326', 'EPSG:3857');
-  vmap.getView().setCenter(c); vmap.getView().setZoom(13);
+  vmap.getView().setCenter(c); vmap.getView().setZoom(14);
 
   vectorSrc   = new ol.source.Vector({ features: [] });
   clusterSrc  = new ol.source.Cluster({ distance: 40, minDistance: 10, source: vectorSrc });
   clusterLayer= new ol.layer.Vector({ source: clusterSrc, style: clusterStyle });
   meLayer     = new ol.layer.Vector({ source: new ol.source.Vector() });
   radiusLayer = new ol.layer.Vector({ source: new ol.source.Vector() });
+  adminLayer  = new ol.layer.Vector({ source: new ol.source.Vector() }); // ★ 행정경계
 
-  try{ vmap.addLayer(clusterLayer); }catch(_){ (vmap.getMap? vmap.getMap():vmap.map).addLayer(clusterLayer); }
-  try{ vmap.addLayer(radiusLayer); }catch(_){ (vmap.getMap? vmap.getMap():vmap.map).addLayer(radiusLayer); }
-  try{ vmap.addLayer(meLayer); }catch(_){ (vmap.getMap? vmap.getMap():vmap.map).addLayer(meLayer); }
+  const realMap = (vmap.addLayer ? vmap : (vmap.getMap? vmap.getMap():vmap.map));
+  realMap.addLayer(clusterLayer);
+  realMap.addLayer(adminLayer);  // ★ 경계는 마커 아래/위 중 선택 → 여기서는 마커 '아래'면 가려지니 '위'로 올립니다.
+  realMap.removeLayer(adminLayer); realMap.addLayer(adminLayer); // 위로 올리기
+  realMap.addLayer(radiusLayer);
+  realMap.addLayer(meLayer);
 
   const el = document.createElement('div');
   el.className = 'ol-popup';
   overlay = new ol.Overlay({ element: el, positioning: 'bottom-center', stopEvent: false, offset: [0, -12] });
-  (vmap.addOverlay ? vmap.addOverlay(overlay) : (vmap.getMap ? vmap.getMap() : vmap.map).addOverlay(overlay));
+  (vmap.addOverlay ? vmap.addOverlay(overlay) : realMap).addOverlay?.(overlay);
 
   vmap.on('click', function(evt){
     let handled = false;
@@ -181,7 +185,7 @@ function initMap(){
       if(members.length > 1){
         const extent = ol.extent.createEmpty();
         members.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
-        vmap.getView().fit(extent, { duration: 300, maxZoom: 17, padding: [80,20,80,20] });
+        vmap.getView().fit(extent, { duration: 300, maxZoom: 17, padding: [40,20,40,380] });
       }else if(members.length === 1){
         const f = members[0]; const p = f.getProperties();
         overlay.setPosition(evt.coordinate);
@@ -227,38 +231,11 @@ function clusterStyle(feature){
   });
 }
 
-/* 원(5km) + 내 위치(사람 아이콘) */
-const PERSON_ICON_SVG = `
-<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'>
-  <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
-    <stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs>
-  <path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/>
-  <circle cx='19' cy='12' r='5' fill='#fff'/>
-  <path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/>
-</svg>`;
-function drawOrigin(lng, lat){
-  const coord = ol.proj.transform([lng,lat],'EPSG:4326','EPSG:3857');
-  const me = new ol.Feature({ geometry: new ol.geom.Point(coord) });
-  me.setStyle(new ol.style.Style({
-    image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(PERSON_ICON_SVG.trim()),
-      scale:1.0, anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' })
-  }));
-  meLayer.getSource().clear(); meLayer.getSource().addFeature(me);
-
-  const circle = new ol.geom.Circle(coord, RADIUS_M);
-  const feat = new ol.Feature(circle);
-  feat.setStyle(new ol.style.Style({
-    stroke:new ol.style.Stroke({ color:[37,99,235,0.9], width:2 }),
-    fill:new ol.style.Fill({ color:[37,99,235,0.15] })
-  }));
-  radiusLayer.getSource().clear(); radiusLayer.getSource().addFeature(feat);
-}
-
 /* =========================
-   2) 데이터 로드 + 좌표계 반경 필터
+   2) 데이터 로드 + 테스트 데이터 보강 + 반경 필터
    ========================= */
-let RAW = [];     // 검색 결과(중복 제거)
-let VIEW = [];    // ORIGIN 기준 5km 내 + 타입필터 적용
+let RAW = [];  // 원본(검색 + 데모)
+let VIEW = []; // 반경/타입 적용 후 화면 표시
 
 async function vworldPlaceSearch(query, page=1, size=100){
   const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0`
@@ -273,9 +250,27 @@ async function vworldPlaceSearch(query, page=1, size=100){
   return [];
 }
 
+function seedDemoAroundOrigin(n=30){
+  const out=[];
+  for(let i=0;i<n;i++){
+    const r = Math.random()*0.8 + 0.05; // km
+    const ang = Math.random()*Math.PI*2;
+    const dLat = (r/111)*Math.sin(ang);
+    const dLng = (r/(111*Math.cos(ORIGIN.lat*Math.PI/180)))*Math.cos(ang);
+    const lat = ORIGIN.lat + dLat, lng = ORIGIN.lng + dLng;
+    const types = ['노상','노외','부설'];
+    const t = types[i%3];
+    out.push({
+      id:`DEMO-${i}`, nm:`데모 ${t} 주차장 ${i+1}`, lng, lat, addr:`김천시 데모로 ${i+1}`, type:t
+    });
+  }
+  return out;
+}
+
 async function loadParking(){
   try{
     let items = [];
+    // 김천 범위 내 검색
     items = items.concat(await vworldPlaceSearch('김천시 주차장',1,100));
     items = items.concat(await vworldPlaceSearch('김천 주차',1,100));
 
@@ -293,27 +288,24 @@ async function loadParking(){
       if(seen.has(key)) continue; seen.add(key);
       rows.push({ id:key, nm:title, lng, lat, addr:road, type:t });
     }
-    RAW = rows;
+    // 테스트 데이터 보강
+    RAW = rows.concat(seedDemoAroundOrigin(30));
   }catch(e){
-    console.warn('검색 실패, 데모 사용', e);
-    RAW = [
-      {id:'TS-DEMO',   nm:'TS 본사 제1주차장(데모)', lng:128.1765, lat:36.1219, addr:'김천시 혁신6로 17', type:'부설'},
-      {id:'KTX-DEMO',  nm:'김천(구미)역 공영주차장(데모)', lng:128.1842, lat:36.1127, addr:'김천시 남면 혁신1로 51', type:'노외'},
-      {id:'CITY-DEMO', nm:'김천시청 공영주차장(데모)',    lng:128.1170, lat:36.1305, addr:'김천시 시청1길 1',   type:'노외'}
-    ];
+    console.warn('검색 실패, 데모만 사용', e);
+    RAW = seedDemoAroundOrigin(30);
   }
-  recompute(); // ORIGIN 기준 5km + 현재 타입필터 반영
+  recompute();
 }
 
-/* ORIGIN 기준으로 5km 내로 필터하고 리스트/마커 갱신 */
+/* 현재 ORIGIN 기준 1km 내 + 타입 필터 */
 function recompute(){
   const within = RAW.map(r=>{
     const dkm = km(ORIGIN, {lng:r.lng, lat:r.lat});
     return { ...r, distKm: dkm };
   }).filter(r => r.distKm*1000 <= RADIUS_M);
 
-  const rows = within.filter(r => !currentType || r.type===currentType);
-  rows.sort((a,b)=>a.distKm - b.distKm);
+  const rows = within.filter(r => !currentType || r.type===currentType)
+                     .sort((a,b)=>a.distKm - b.distKm);
 
   VIEW = rows;
   buildList(rows);
@@ -326,7 +318,7 @@ function recompute(){
 function buildList(rows){
   const list = $('#list');
   if(rows.length===0){
-    list.innerHTML = `<div class="item"><div class="nm">결과 없음</div><div class="sub">현재 반경 ${mToKm(RADIUS_M)}km / 형태: ${currentType||'전체'}</div></div>`;
+    list.innerHTML = `<div class="item"><div class="nm">결과 없음</div><div class="sub">반경 1km / 형태: ${currentType||'전체'}</div></div>`;
     countEl.textContent = '0';
     return;
   }
@@ -368,7 +360,7 @@ function focusItem(id){
 }
 
 /* =========================
-   4) 마커(클러스터) 렌더링
+   4) 마커(클러스터)
    ========================= */
 function rebuildMarkers(rows){
   const feats = rows.map(r=>{
@@ -381,7 +373,7 @@ function rebuildMarkers(rows){
 }
 
 /* =========================
-   5) 현재 위치(사람 아이콘) & 5km 원 갱신
+   5) 현재 위치 & 1km 원
    ========================= */
 function setOrigin(lng, lat, fly=true){
   ORIGIN = {lng, lat};
@@ -391,12 +383,38 @@ function setOrigin(lng, lat, fly=true){
     vmap.getView().setCenter(c); vmap.getView().setZoom(15);
   }
   recompute();
+  loadAdminBoundaries(); // ★ 원점 바뀔 때 경계도 갱신
 }
-function ensureRadius(){
-  if(!radiusLayer.getSource().getFeatures().length){
-    drawOrigin(ORIGIN.lng, ORIGIN.lat);
-  }
+function drawOrigin(lng, lat){
+  // 사람 아이콘
+  const PERSON_ICON_SVG = `
+  <svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'>
+    <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs>
+    <path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/>
+    <circle cx='19' cy='12' r='5' fill='#fff'/>
+    <path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/>
+  </svg>`;
+  const c = ol.proj.transform([lng, lat], 'EPSG:4326', 'EPSG:3857');
+  const me = new ol.Feature({ geometry: new ol.geom.Point(c) });
+  me.setStyle(new ol.style.Style({
+    image:new ol.style.Icon({
+      src: 'data:image/svg+xml;utf8,'+encodeURIComponent(PERSON_ICON_SVG.trim()),
+      scale:1.0, anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction'
+    })
+  }));
+  meLayer.getSource().clear(); meLayer.getSource().addFeature(me);
+
+  // 1km 원
+  const circle = new ol.geom.Circle(c, RADIUS_M);
+  const feat = new ol.Feature(circle);
+  feat.setStyle(new ol.style.Style({
+    stroke:new ol.style.Stroke({ color:[220,38,38,0.9], width:2 }), // 경계와 구분되게 붉은색 테두리
+    fill:new ol.style.Fill({ color:[220,38,38,0.12] })
+  }));
+  radiusLayer.getSource().clear(); radiusLayer.getSource().addFeature(feat);
 }
+
 function getMyLocation(){
   const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
   if(!secureOK){ showToast('현재 위치는 HTTPS 또는 localhost에서만 사용 가능'); return; }
@@ -407,7 +425,58 @@ function getMyLocation(){
 }
 
 /* =========================
-   6) 타입 버튼(칩) 동작
+   6) 행정경계 (시/구) – 붉은색 선
+   ========================= */
+async function fetchWFS(typename, bbox4326){
+  // VWorld WFS: GeoJSON
+  const url = `https://api.vworld.kr/req/wfs?service=WFS&request=GetFeature&version=1.0.0`
+            + `&typename=${encodeURIComponent(typename)}`
+            + `&outputFormat=application/json&srsName=EPSG:4326`
+            + `&bbox=${bbox4326.join(',')},EPSG:4326`
+            + `&key=${encodeURIComponent(VWORLD_KEY)}&domain=${encodeURIComponent(VWORLD_DOMAIN)}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('WFS 요청 실패');
+  return await res.json();
+}
+
+async function loadAdminBoundaries(){
+  try{
+    const bbox = degBoxAround(ORIGIN.lng, ORIGIN.lat, 10); // ORIGIN 기준 10km 박스
+    // ★ 흔히 사용되는 VWorld 행정경계 레이어명 (시도/시군구)
+    const T_SIDO = 'lt_c_adsido'; // (서비스에 따라 대소문자 다를 수 있음)
+    const T_SIGG = 'lt_c_adsigg';
+
+    const [sido, sigg] = await Promise.all([
+      fetchWFS(T_SIDO, bbox).catch(_=>null),
+      fetchWFS(T_SIGG, bbox).catch(_=>null),
+    ]);
+
+    const fmt = new ol.format.GeoJSON();
+    const src = adminLayer.getSource();
+    src.clear();
+
+    const add = (geojson, color) =>{
+      if(!geojson) return;
+      const feats = fmt.readFeatures(geojson, { dataProjection:'EPSG:4326', featureProjection:'EPSG:3857' });
+      feats.forEach(f=>{
+        f.setStyle(new ol.style.Style({
+          stroke:new ol.style.Stroke({ color, width:2.2 }),
+          fill: null
+        }));
+      });
+      src.addFeatures(feats);
+    };
+    add(sido, 'rgba(239,68,68,0.95)'); // 진한 빨강
+    add(sigg, 'rgba(239,68,68,0.95)');
+
+  }catch(e){
+    console.warn('행정경계 로드 실패', e);
+    showToast('행정경계 로드 실패(계정/도메인/레이어명 확인)');
+  }
+}
+
+/* =========================
+   7) 타입 칩 동작
    ========================= */
 function initTypeBar(){
   const bar = $('#typeBar');
@@ -415,38 +484,56 @@ function initTypeBar(){
     const chip = e.target.closest('.chip'); if(!chip) return;
     bar.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
     chip.classList.add('active');
-    currentType = chip.dataset.type || "";   // ← 전역 currentType 사용
+    currentType = chip.dataset.type || "";
     recompute();
   });
 }
 
 /* =========================
-   7) 시작
+   8) 시작
    ========================= */
 async function start(){
   initMap();
   initTypeBar();
 
-  // 현재 위치 먼저 시도 → ORIGIN 갱신 + 5km 원 그리기
+  // 현재 위치 먼저 시도
   getMyLocation();
-  // 데이터 로드 후 ORIGIN 기준 5km + 타입필터로 뿌리기
-  await loadParking();
-  // 위치 실패 시에도 기본 원 표시
-  ensureRadius();
 
-  showToast('왼쪽 목록에서 주차장을 선택하세요');
+  // 데이터 로드 (+데모 보강)
+  await loadParking();
+
+  // 행정경계 로드 (초기 ORIGIN 기준)
+  await loadAdminBoundaries();
+
+  showToast('좌측 목록에서 주차장을 선택하세요');
 }
 
-/* 상단 버튼 */
+/* 좌측 버튼 */
 document.getElementById('locBtn').addEventListener('click', getMyLocation);
 document.getElementById('fitBtn').addEventListener('click', ()=>{
   const extent = ol.extent.createEmpty();
   radiusLayer.getSource().getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
   vectorSrc.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
   if(!ol.extent.isEmpty(extent)){
-    vmap.getView().fit(extent, {duration:400, padding:[80,20,80,360], maxZoom:16});
+    vmap.getView().fit(extent, {duration:400, padding:[40,20,40,380], maxZoom:16});
   }
 });
+document.getElementById('reloadAdminBtn').addEventListener('click', loadAdminBoundaries);
+
+/* 리스트에서 항목 클릭 시 포커스 */
+function focusItem(id){
+  const r = VIEW.find(x => x.id===id);
+  if(!r) return;
+  const coord = ol.proj.transform([r.lng, r.lat],'EPSG:4326','EPSG:3857');
+  vmap.getView().setCenter(coord); vmap.getView().setZoom(16);
+  overlay.setPosition(coord);
+  overlay.getElement().innerHTML =
+    `<div class="tit">${r.nm}</div>
+     <div class="sub2">${r.addr||''}</div>
+     <div class="sub2">형태: ${r.type} · 좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</div>`;
+  selEl.textContent = r.nm;
+  highlightListItem(r.nm);
+}
 
 start();
 </script>
