@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>브이월드 WMTS + 경계 WMS · 리스트/필터 · 오류로그(FAB) · OL 10.6.1</title>
+<title>브이월드 WMTS + 경계 WMS/WFS 폴백 · 리스트/필터 · 오류로그(FAB) · OL 10.6.1</title>
 
 <!-- ✅ OpenLayers 동적 로더: 10.6.1 (로컬 → CDN 폴백) -->
 <script>
@@ -315,8 +315,15 @@
       switchToOSM('tileloaderror');
     });
 
-    /* ===== 행정경계선 WMS (시도/시군구/읍면동) ===== */
+    /* ===== 행정경계선 WMS → 실패 시 WFS(GeoJSON) 폴백 ===== */
     const VW_WMS = `https://api.vworld.kr/req/wms?key=${VW_KEY}&domain=${DOMAIN}`;
+    const VW_WFS = `https://api.vworld.kr/req/wfs?key=${VW_KEY}&domain=${DOMAIN}`;
+
+    // 공통 스타일(폴백 WFS용) — 붉은 윤곽선
+    const redLine = new ol.style.Style({
+      stroke:new ol.style.Stroke({ color:[239,68,68,0.95], width:2 })
+    });
+
     function makeAdmWMS(layerName, zIndex){
       const layer = new ol.layer.Tile({
         source: new ol.source.TileWMS({
@@ -326,7 +333,7 @@
             VERSION: '1.3.0',
             REQUEST: 'GetMap',
             LAYERS: layerName,
-            STYLES: layerName,   // 서버 권장 스타일
+            STYLES: '',             // ✅ 기본 스타일(비움) — 일부 환경에서 name 지정 시 에러
             FORMAT: 'image/png',
             TRANSPARENT: true,
             CRS: 'EPSG:3857',
@@ -338,23 +345,88 @@
         visible: true,
         zIndex
       });
+
+      // 타일 에러 시 자동 폴백: 동일 레이어의 WFS를 생성/표시
       layer.getSource().on('tileloaderror', () => {
-        logErr(`WMS ${layerName} tile error`);
+        logErr(`WMS ${layerName} tile error → WFS로 폴백`);
         layer.setVisible(false);
+        activateWFS(layerName, zIndex + 100); // 위로 올림
       });
       return layer;
     }
+
+    // BBOX 기반 WFS Vector (on-demand 로딩)
+    const bboxStrategy = ol.loadingstrategy.bbox;
+    const wfsLayers = {}; // 캐시
+    function activateWFS(wmsLayerName, zIndex){
+      if(wfsLayers[wmsLayerName]){ wfsLayers[wmsLayerName].setVisible(true); return; }
+      const typename = wmsLayerName + '_info'; // 시도/시군구/읍면동 모두 _info 사용
+      const src = new ol.source.Vector({
+        format: new ol.format.GeoJSON(),
+        url: (extent, resolution, projection)=>{
+          const params = new URLSearchParams({
+            service:'WFS',
+            request:'GetFeature',
+            version:'1.1.0',
+            typename: typename,
+            srsname:'EPSG:3857',
+            output:'application/json',
+            bbox: extent.join(',') + ',EPSG:3857'
+          });
+          const url = `${VW_WFS}&${params.toString()}`;
+          logInfo('WFS request', url);
+          return url;
+        },
+        strategy: bboxStrategy
+      });
+      const layer = new ol.layer.Vector({ source: src, style: redLine, zIndex, visible:true });
+      wfsLayers[wmsLayerName] = layer;
+      map.addLayer(layer);
+
+      // 로딩 에러 로깅(간단)
+      src.on('featuresloaderror', (e)=> logErr(`WFS ${typename} load error`, JSON.stringify(e)));
+    }
+
+    // 경계 레이어(WMS 우선, 필요 시 WFS로 자동 전환)
     const wmsSido = makeAdmWMS('lt_c_adsido', 201);
     const wmsSigg = makeAdmWMS('lt_c_adsigg', 202);
     const wmsEmd  = makeAdmWMS('lt_c_ademd',  203);
     map.addLayer(wmsSido); map.addLayer(wmsSigg); map.addLayer(wmsEmd);
 
-    // UI 토글
-    $('#admSido').addEventListener('change', e => wmsSido.setVisible(e.target.checked));
-    $('#admSigg').addEventListener('change', e => wmsSigg.setVisible(e.target.checked));
-    $('#admEmd') .addEventListener('change', e => wmsEmd .setVisible(e.target.checked));
+    // UI 토글: 켜질 때 WMS가 비가시/에러 상태면 즉시 WFS 켜기
+    const getLayerState = (name)=>({wms: name==='lt_c_adsido'?wmsSido:name==='lt_c_adsigg'?wmsSigg:wmsEmd, wfs:wfsLayers[name]});
+    $('#admSido').addEventListener('change', e=>{
+      const L = getLayerState('lt_c_adsido');
+      if(e.target.checked){
+        if(L.wms.getVisible()===false){ activateWFS('lt_c_adsido', 301); }
+        L.wms.setVisible(true);
+        if(L.wfs) L.wfs.setVisible(true);
+      }else{
+        L.wms.setVisible(false); if(L.wfs) L.wfs.setVisible(false);
+      }
+    });
+    $('#admSigg').addEventListener('change', e=>{
+      const L = getLayerState('lt_c_adsigg');
+      if(e.target.checked){
+        if(L.wms.getVisible()===false){ activateWFS('lt_c_adsigg', 302); }
+        L.wms.setVisible(true);
+        if(L.wfs) L.wfs.setVisible(true);
+      }else{
+        L.wms.setVisible(false); if(L.wfs) L.wfs.setVisible(false);
+      }
+    });
+    $('#admEmd').addEventListener('change', e=>{
+      const L = getLayerState('lt_c_ademd');
+      if(e.target.checked){
+        if(L.wms.getVisible()===false){ activateWFS('lt_c_ademd', 303); }
+        L.wms.setVisible(true);
+        if(L.wfs) L.wfs.setVisible(true);
+      }else{
+        L.wms.setVisible(false); if(L.wfs) L.wfs.setVisible(false);
+      }
+    });
 
-    /* ---- 아이콘/스타일 ---- */
+    /* ---- 아이콘/스타일 (주차장/현재위치/반경) ---- */
     const PARK_SVG =
       `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
          <circle cx='18' cy='18' r='16' fill='#2563eb'/>
