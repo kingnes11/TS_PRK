@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>브이월드 WMTS · 리스트 패널 + 필터 + 더미1000</title>
+<title>브이월드 WMTS · 리스트 + 필터 + 더미1000 (즉시표시/자동업그레이드)</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/ol/6.15.1/ol.css">
@@ -71,7 +71,7 @@
   <div class="row">
     <button class="btn primary" id="baseBtn">기본지도</button>
     <button class="btn" id="satBtn">항공+문자</button>
-    <span id="stat" class="muted" style="margin-left:auto">초기화 중…</span>
+    <span id="stat" class="muted" style="margin-left:auto">지도 준비 중…</span>
   </div>
 
   <div class="row">
@@ -93,19 +93,18 @@
 (function(){
   /* ===== 설정 ===== */
   const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82'; // WMTS 키
-  const INIT   = { lng:128.1136, lat:36.1398 };          // 김천(한국교통안전공단)
+  const INIT   = { lng:128.1136, lat:36.1398 };          // 김천(교통안전공단)
   const DEMO_N = 1000;          // 더미 개수
   const RADIUS_KM = 5.0;        // 반경
   document.getElementById('radiusLabel').textContent = RADIUS_KM;
 
-  /* ===== 상태/UI 유틸 ===== */
   const $ = (s)=>document.querySelector(s);
   const stat = $('#stat');
   const ok   = (m)=> stat.innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
   const warn = (m)=> stat.innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
   const bad  = (m)=> stat.innerHTML = `<span style="color:#ef4444">✖</span> ${m}`;
 
-  /* ===== WMTS 타일 (브이월드 로더 없음) ===== */
+  /* ===== WMTS 타일 (브이월드 로더 없음) + 타일 실패시 OSM로 자동 교체 ===== */
   const vworldBase = new ol.layer.Tile({
     source: new ol.source.XYZ({
       url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`
@@ -124,22 +123,44 @@
     }),
     zIndex: 1, visible: false
   });
+  const osmFallback = new ol.layer.Tile({
+    source: new ol.source.OSM(),
+    zIndex: 0, visible: false
+  });
 
-  /* ===== 지도 ===== */
   const map = new ol.Map({
     target:'map',
-    layers:[ vworldBase, vworldSat, vworldHybrid ],
+    layers:[ vworldBase, vworldSat, vworldHybrid, osmFallback ],
     view: new ol.View({ center: ol.proj.fromLonLat([INIT.lng, INIT.lat]), zoom: 14 })
+  });
+
+  // 타일 실패 감지 → OSM로 스위치 (한 번만)
+  let switchedToOSM = false;
+  function switchToOSM(reason){
+    if (switchedToOSM) return;
+    switchedToOSM = true;
+    vworldBase.setVisible(false);
+    vworldSat.setVisible(false);
+    vworldHybrid.setVisible(false);
+    osmFallback.setVisible(true);
+    warn(`브이월드 타일 문제(${reason}) → OSM로 전환`);
+  }
+  [vworldBase, vworldSat, vworldHybrid].forEach(ly=>{
+    ly.getSource().on('tileloaderror', ()=> switchToOSM('tileloaderror'));
   });
 
   // 베이스/항공 토글
   $('#baseBtn').addEventListener('click', ()=>{
-    vworldBase.setVisible(true); vworldSat.setVisible(false); vworldHybrid.setVisible(false);
-    $('#baseBtn').classList.add('primary'); $('#satBtn').classList.remove('primary');
+    if (!switchedToOSM){
+      vworldBase.setVisible(true); vworldSat.setVisible(false); vworldHybrid.setVisible(false);
+      $('#baseBtn').classList.add('primary'); $('#satBtn').classList.remove('primary');
+    }
   });
   $('#satBtn').addEventListener('click', ()=>{
-    vworldBase.setVisible(false); vworldSat.setVisible(true); vworldHybrid.setVisible(true);
-    $('#satBtn').classList.add('primary'); $('#baseBtn').classList.remove('primary');
+    if (!switchedToOSM){
+      vworldBase.setVisible(false); vworldSat.setVisible(true); vworldHybrid.setVisible(true);
+      $('#satBtn').classList.add('primary'); $('#baseBtn').classList.remove('primary');
+    }
   });
 
   /* ===== 아이콘/스타일 ===== */
@@ -219,7 +240,6 @@
     $('#sel').textContent = p.nm || '-';
   }
 
-  // 맵 클릭: 클러스터면 확대, 단일이면 팝업+리스트 하이라이트
   map.on('singleclick', (evt)=>{
     let handled=false;
     map.forEachFeatureAtPixel(evt.pixel,(feature, layer)=>{
@@ -317,6 +337,15 @@
   });
 
   /* ===== 현재 위치/반경 원/시드 ===== */
+
+  // ★ 즉시 표시: 김천 기준으로 먼저 렌더링(멈춤 방지)
+  setMeAndSeed(INIT.lng, INIT.lat, '김천 기준 시작');  // 바로 그려서 "초기화 중" 멈춤 X
+  // 그다음 백그라운드에서 현재 위치로 업그레이드
+  autoLocateUpgrade();
+
+  $('#locBtn').addEventListener('click', ()=> autoLocateUpgrade(true));
+  $('#fitBtn').addEventListener('click', fitAll);
+
   function setMeAndSeed(lng, lat, msg){
     // 현재 위치 + 반경
     meSrc.clear();
@@ -328,7 +357,7 @@
     ROWS_ALL = generateDummyAround(lng, lat, DEMO_N, RADIUS_KM);
     applyFilter();
 
-    // 뷰
+    // 뷰 (초기만 애니메이션 없이)
     map.getView().setCenter(center); map.getView().setZoom(15);
     ok(`${msg} · 반경 ${RADIUS_KM}km · 더미 ${DEMO_N}개`);
   }
@@ -340,23 +369,44 @@
     if(!ol.extent.isEmpty(ex)) map.getView().fit(ex,{duration:400, padding:[30,380,30,30], maxZoom:16});
   }
 
-  $('#locBtn').addEventListener('click', ()=> autoLocate(true));
-  $('#fitBtn').addEventListener('click', fitAll);
+  // 권한 상태 보고 + 현재 위치 업그레이드(응답 없어도 일정 시간 뒤 자동 종료)
+  async function autoLocateUpgrade(fly=false){
+    try{
+      if(!('geolocation' in navigator)) { warn('지오로케이션 미지원 · 김천 유지'); return; }
 
-  function autoLocate(fly=false){
-    const isSecure = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-    const fallback = ()=> setMeAndSeed(INIT.lng, INIT.lat, '위치 실패 → 김천 기준');
-    if(!isSecure || !navigator.geolocation){ warn('비보안/미지원 환경 · 김천 기준'); fallback(); return; }
-    let fixed=false;
-    const opts={ enableHighAccuracy:true, maximumAge:5000, timeout:9000 };
-    const apply=(lng,lat)=>{ if(fixed) return; fixed=true; setMeAndSeed(lng,lat,'현재 위치 기준'); if(fly){ map.getView().animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); } };
-    const wid=navigator.geolocation.watchPosition(p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },()=>{},opts);
-    navigator.geolocation.getCurrentPosition(p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); }, fallback, opts);
+      // (옵션) 권한 상태 로그
+      if('permissions' in navigator && navigator.permissions?.query){
+        try{
+          const st = await navigator.permissions.query({name:'geolocation'});
+          console.debug('[geo permission]', st.state);
+        }catch{}
+      }
+
+      let done=false;
+      const opts={ enableHighAccuracy:true, maximumAge:5000, timeout:9000 };
+      const timer = setTimeout(()=>{ if(!done){ warn('위치 응답 지연 · 김천 유지'); done=true; } }, 10000);
+
+      const apply=(lng,lat)=>{
+        if(done) return;
+        done=true; clearTimeout(timer);
+        setMeAndSeed(lng,lat,'현재 위치로 업데이트');
+        if(fly){ map.getView().animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); }
+      };
+
+      const wid=navigator.geolocation.watchPosition(
+        p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },
+        ()=>{}, opts
+      );
+      navigator.geolocation.getCurrentPosition(
+        p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },
+        ()=>{ if(!done){ warn('위치 거부/실패 · 김천 유지'); done=true; clearTimeout(timer); } },
+        opts
+      );
+    }catch(e){
+      console.error(e);
+      warn('위치 처리 오류 · 김천 유지');
+    }
   }
-
-  /* ===== 시작 ===== */
-  autoLocate(false); // 자동 현재위치 시도 → 실패 시 김천 폴백
-
 })();
 </script>
 </body>
