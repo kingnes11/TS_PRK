@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>주차장 지도 · 현재위치 자동 · 반경 3km · 행정경계</title>
+<title>주차장 지도 · 로드 즉시 표시 · 현재위치 자동 · 반경 3km</title>
 
 <!-- VWorld 2D API (도메인 등록 必: 제공값 사용) -->
 <script src="https://map.vworld.kr/js/vworldMapInit.js.do?version=2.0&apiKey=CF9A371B-35A6-3822-8315-6592C8342E82&domain=psychic-pancake-r7q577jxr6ghwx9g-8080.app.github.dev"></script>
@@ -54,7 +54,7 @@
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:40;background:#111827;color:#fff;border:1px solid #374151;padding:10px 12px;border-radius:10px;display:none}
 
-  /* 팝업 (닫기 버튼 포함, 클릭 가능) */
+  /* 팝업 (닫기 버튼 포함) */
   .ol-popup{position:absolute;background:#111827;color:#e5e7eb;padding:10px 12px;border:1px solid #374151;border-radius:10px;
     min-width:220px;transform:translate(-50%,-110%);pointer-events:auto}
   .ol-popup .tit{font-weight:700;margin-right:26px}
@@ -117,23 +117,19 @@ function showToast(msg, ms=2000){
   toast.textContent = msg; toast.style.display='block';
   clearTimeout(showToast._t); showToast._t=setTimeout(()=>toast.style.display='none', ms);
 }
-function km(a,b){
-  const R=6371,toRad=d=>d*Math.PI/180;
-  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
-  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
-  const t=s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
-  return 2*R*Math.asin(Math.sqrt(t));
-}
-function degBoxAround(lng, lat, kmRadius){
-  const dLat = kmRadius/111;
-  const dLng = kmRadius/(111*Math.cos(lat*Math.PI/180));
-  return [lng-dLng, lat-dLat, lng+dLng, lat+dLat];
-}
-function inferType(name="", category="", addr=""){
-  if(/노상/.test(name)||/노상/.test(category)) return "노상";
-  if(/노외|공영|타워|주차타워/.test(name)||/노외|공영|타워/.test(category)) return "노외";
-  if(/부설|몰|백화점|병원|학교|아파트/.test(name+addr)) return "부설";
-  return "노외";
+
+/* =========================
+   A) 브이월드 준비 대기 → 준비되면 바로 맵 생성
+   ========================= */
+function waitForVWorld(maxMs=12000){
+  const start = performance.now();
+  return new Promise((resolve, reject)=>{
+    (function poll(){
+      if(window.vw && vw.ol3 && window.ol){ resolve(); return; }
+      if(performance.now()-start > maxMs){ reject(new Error('VWorld load timeout')); return; }
+      setTimeout(poll, 60);
+    })();
+  });
 }
 
 /* =========================
@@ -141,11 +137,14 @@ function inferType(name="", category="", addr=""){
    ========================= */
 let vmap, vectorSrc, clusterSrc, clusterLayer, overlay;
 let meLayer, radiusLayer, adminLayer;
-let popupEl; // 닫기 버튼이 있는 팝업 DOM
+let popupEl;
+
+function updateSizeSafe(){
+  const real = vmap?.getMap ? vmap.getMap() : (vmap?.map || vmap);
+  try{ real && real.updateSize && real.updateSize(); }catch(_){}
+}
 
 function initMap(){
-  if(!(window.vw && vw.ol3 && window.ol)){ showToast('VWorld 로드 실패(apiKey/domain 확인)'); return; }
-
   vw.ol3.MapOptions = {
     basemapType: vw.ol3.BasemapType.GRAPHIC,
     controlDensity: vw.ol3.DensityType.EMPTY,
@@ -168,12 +167,11 @@ function initMap(){
 
   const realMap = (vmap.addLayer ? vmap : (vmap.getMap? vmap.getMap():vmap.map));
   realMap.addLayer(clusterLayer);
-  realMap.addLayer(adminLayer);  // bring to top
-  realMap.removeLayer(adminLayer); realMap.addLayer(adminLayer);
+  realMap.addLayer(adminLayer); realMap.removeLayer(adminLayer); realMap.addLayer(adminLayer);
   realMap.addLayer(radiusLayer);
   realMap.addLayer(meLayer);
 
-  // 닫기 버튼 있는 팝업 생성 (pointer-events: auto, stopEvent: true)
+  // 닫기 버튼 팝업
   popupEl = document.createElement('div');
   popupEl.className = 'ol-popup';
   popupEl.innerHTML = `
@@ -184,7 +182,6 @@ function initMap(){
   `;
   overlay = new ol.Overlay({ element: popupEl, positioning: 'bottom-center', stopEvent: true, offset: [0, -12] });
   (vmap.addOverlay ? vmap.addOverlay(overlay) : realMap).addOverlay?.(overlay);
-
   popupEl.querySelector('.x').addEventListener('click', ()=> overlay.setPosition(undefined));
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') overlay.setPosition(undefined); });
 
@@ -210,6 +207,10 @@ function initMap(){
     });
     if(!handled) overlay.setPosition(undefined);
   });
+
+  // 맵 사이즈 보정(초기/리사이즈)
+  setTimeout(updateSizeSafe, 0);
+  window.addEventListener('resize', ()=> setTimeout(updateSizeSafe, 0));
 }
 
 const PARK_ICON_SVG = `
@@ -242,7 +243,29 @@ function clusterStyle(feature){
 }
 
 /* =========================
-   2) 실데이터 + 데모데이터
+   2) 유틸/계산
+   ========================= */
+function km(a,b){
+  const R=6371,toRad=d=>d*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
+  const t=s1*s1 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+  return 2*R*Math.asin(Math.sqrt(t));
+}
+function degBoxAround(lng, lat, kmRadius){
+  const dLat = kmRadius/111;
+  const dLng = kmRadius/(111*Math.cos(lat*Math.PI/180));
+  return [lng-dLng, lat-dLat, lng+dLng, lat+dLat];
+}
+function inferType(name="", category="", addr=""){
+  if(/노상/.test(name)||/노상/.test(category)) return "노상";
+  if(/노외|공영|타워|주차타워/.test(name)||/노외|공영|타워/.test(category)) return "노외";
+  if(/부설|몰|백화점|병원|학교|아파트/.test(name+addr)) return "부설";
+  return "노외";
+}
+
+/* =========================
+   3) 데이터(실검색 + 데모)
    ========================= */
 async function vworldPlaceSearch(query, page=1, size=100){
   const url = `https://api.vworld.kr/req/search?service=search&request=search&version=2.0`
@@ -299,25 +322,8 @@ async function loadLive(){
   recompute();
 }
 
-/* ORIGIN 기준 3km + 타입 필터 */
-function recompute(){
-  const ALL = LIVE.concat(DEMO); // 항상 DEMO 포함
-  const within = ALL.map(r=>{
-    const dkm = km(ORIGIN, {lng:r.lng, lat:r.lat});
-    return { ...r, distKm: dkm };
-  }).filter(r => r.distKm*1000 <= RADIUS_M);
-
-  const rows = within
-    .filter(r => !currentType || r.type===currentType)
-    .sort((a,b)=>a.distKm - b.distKm);
-
-  VIEW = rows;
-  buildList(rows);
-  rebuildMarkers(rows);
-}
-
 /* =========================
-   3) 리스트 UI
+   4) 뷰 계산/표시
    ========================= */
 function buildList(rows){
   const list = $('#list');
@@ -361,10 +367,6 @@ function focusItem(id){
   selEl.textContent = r.nm;
   highlightListItem(r.nm);
 }
-
-/* =========================
-   4) 마커(클러스터)
-   ========================= */
 function rebuildMarkers(rows){
   const feats = rows.map(r=>{
     const coord = ol.proj.transform([r.lng, r.lat], 'EPSG:4326', 'EPSG:3857');
@@ -374,9 +376,24 @@ function rebuildMarkers(rows){
   });
   vectorSrc.clear(); vectorSrc.addFeatures(feats);
 }
+function recompute(){
+  const ALL = LIVE.concat(DEMO); // 항상 DEMO 포함
+  const within = ALL.map(r=>{
+    const dkm = km(ORIGIN, {lng:r.lng, lat:r.lat});
+    return { ...r, distKm: dkm };
+  }).filter(r => r.distKm*1000 <= RADIUS_M);
+
+  const rows = within
+    .filter(r => !currentType || r.type===currentType)
+    .sort((a,b)=>a.distKm - b.distKm);
+
+  VIEW = rows;
+  buildList(rows);
+  rebuildMarkers(rows);
+}
 
 /* =========================
-   5) 현재 위치 & 3km 원
+   5) 현재 위치 & 반경
    ========================= */
 function drawOrigin(lng, lat){
   const PERSON_ICON_SVG = `
@@ -405,66 +422,42 @@ function drawOrigin(lng, lat){
   }));
   radiusLayer.getSource().clear(); radiusLayer.getSource().addFeature(feat);
 }
-
-/* ORIGIN 설정: 데모 재생성하여 항상 보이게 */
 function setOrigin(lng, lat, fly=true){
   ORIGIN = {lng, lat};
   drawOrigin(lng, lat);
-  DEMO = generateDemo(50); // ★ 중심 바뀔 때마다 재생성
+  // 중심 바뀔 때마다 데모 재생성 → 항상 반경 3km 내에 충분한 포인트 보장
+  DEMO = generateDemo(50);
   if(fly){
     const c = ol.proj.transform([lng,lat],'EPSG:4326','EPSG:3857');
     vmap.getView().setCenter(c); vmap.getView().setZoom(15);
   }
   recompute();
-  loadAdminBoundaries(); // 경계 갱신
+  loadAdminBoundaries(); // 시/구 경계 갱신
 }
 
 /* =========================
-   6) 자동 현재위치 (버튼 누르지 않아도 시도)
-   - getCurrentPosition으로 즉시 요청 + watchPosition으로 ‘늦게 오는’ 좌표도 1회 반영
+   6) 자동 현재위치 (로드와 동시에 시도)
    ========================= */
-async function autoLocateAtStart(){
+async function autoLocate(){
   const secureOK = (location.protocol==='https:') || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-  if(!secureOK || !navigator.geolocation){
-    // 보안 문맥 아님 → 기본점으로 즉시 표시
-    setOrigin(FALLBACK_CENTER.lng, FALLBACK_CENTER.lat, true);
-    showToast('HTTPS가 아니므로 기본 위치를 사용합니다');
-    return;
-  }
-
-  // 1) 우선 기본점으로 즉시 화면 구성(데모 보장)
-  setOrigin(FALLBACK_CENTER.lng, FALLBACK_CENTER.lat, true);
-
-  // 2) 권한 상태 확인 후 요청
-  try{
-    if(navigator.permissions && navigator.permissions.query){
-      const st = await navigator.permissions.query({name:'geolocation'});
-      // granted면 바로 호출, prompt여도 호출하면 브라우저가 묻고 OK 시 성공 콜백
-    }
-  }catch(_){}
+  if(!secureOK || !navigator.geolocation){ return; }
 
   let fixed = false;
   const opts = { enableHighAccuracy:true, maximumAge:5000, timeout:8000 };
 
-  // watch로 '조금 늦게 도착하는' 좌표를 1회 반영
   const wid = navigator.geolocation.watchPosition(pos=>{
     if(fixed) return;
     fixed = true;
     navigator.geolocation.clearWatch(wid);
     setOrigin(pos.coords.longitude, pos.coords.latitude, true);
-  }, _=>{
-    // 무시 (getCurrentPosition이 아래에서 백업)
-  }, opts);
+  }, ()=>{}, opts);
 
-  // 동시에 즉시 1회 요청 (일부 브라우저는 watch가 느림)
   navigator.geolocation.getCurrentPosition(pos=>{
     if(fixed) return;
     fixed = true;
     navigator.geolocation.clearWatch(wid);
     setOrigin(pos.coords.longitude, pos.coords.latitude, true);
-  }, _=>{
-    // 실패시 그대로 기본점 유지
-  }, opts);
+  }, ()=>{}, opts);
 }
 
 /* =========================
@@ -479,11 +472,6 @@ async function fetchWFS(typename, bbox4326){
   const res = await fetch(url);
   if(!res.ok) throw new Error('WFS 요청 실패');
   return await res.json();
-}
-function degBoxAround(lng, lat, kmRadius){
-  const dLat = kmRadius/111;
-  const dLng = kmRadius/(111*Math.cos(lat*Math.PI/180));
-  return [lng-dLng, lat-dLat, lng+dLng, lat+dLat];
 }
 async function loadAdminBoundaries(){
   try{
@@ -504,10 +492,7 @@ async function loadAdminBoundaries(){
       if(!geojson) return;
       const feats = fmt.readFeatures(geojson, { dataProjection:'EPSG:4326', featureProjection:'EPSG:3857' });
       feats.forEach(f=>{
-        f.setStyle(new ol.style.Style({
-          stroke:new ol.style.Stroke({ color, width:2.2 }),
-          fill: null
-        }));
+        f.setStyle(new ol.style.Style({ stroke:new ol.style.Stroke({ color, width:2.2 }), fill: null }));
       });
       src.addFeatures(feats);
     };
@@ -534,34 +519,38 @@ function initTypeBar(){
 }
 
 /* =========================
-   9) 시작 (자동 현재위치 + 데모 보장)
+   9) 부트스트랩 (로드 즉시 지도 보이기)
+   - 브이월드 준비를 기다렸다가: 맵 생성 → 기본점으로 즉시 표시(데모 포함)
+   - 그 다음 현재위치 자동 보정, 실데이터 추가 로드
    ========================= */
-async function start(){
-  initMap();
-  initTypeBar();
-
-  // ★ 자동 현재위치: 버튼 없이도 시도 → 성공 시 즉시 재중심
-  await autoLocateAtStart();
-
-  // LIVE는 백그라운드로 추가
-  loadLive();
-
-  showToast('주변 주차장을 불러왔습니다');
+async function bootstrap(){
+  try{
+    await waitForVWorld();            // 1) VWorld 준비 기다림
+    initMap();                        // 2) 맵 즉시 생성
+    setOrigin(ORIGIN.lng, ORIGIN.lat, true); // 3) 기본 김천 중심으로 바로 표시(데모 50개 생성됨)
+    initTypeBar();
+    loadAdminBoundaries();            // 4) 경계
+    autoLocate();                     // 5) 현재위치 자동 보정(가능 시 중심 이동)
+    loadLive();                       // 6) 실데이터 추가
+    showToast('지도를 불러왔습니다');
+  }catch(e){
+    console.error(e);
+    showToast('VWorld 로드에 실패했습니다(키/도메인/네트워크 확인)');
+  }
 }
 
-/* 좌측 버튼 보조 */
-document.getElementById('locBtn').addEventListener('click', autoLocateAtStart);
+/* 보조 버튼 */
+document.getElementById('locBtn').addEventListener('click', autoLocate);
 document.getElementById('fitBtn').addEventListener('click', ()=>{
   const extent = ol.extent.createEmpty();
-  radiusLayer.getSource().getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
-  vectorSrc.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
-  if(!ol.extent.isEmpty(extent)){
-    vmap.getView().fit(extent, {duration:400, padding:[40,20,40,380], maxZoom:16});
-  }
+  radiusLayer?.getSource()?.getFeatures().forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
+  vectorSrc?.getFeatures()?.forEach(f=> ol.extent.extend(extent, f.getGeometry().getExtent()));
+  if(!ol.extent.isEmpty(extent)){ vmap.getView().fit(extent, {duration:400, padding:[40,20,40,380], maxZoom:16}); }
 });
 document.getElementById('reloadAdminBtn').addEventListener('click', loadAdminBoundaries);
 
-window.addEventListener('load', start);
+/* DOM 준비되면 바로 부트스트랩 → 버튼 누를 필요 없음 */
+document.addEventListener('DOMContentLoaded', bootstrap);
 </script>
 </body>
 </html>
