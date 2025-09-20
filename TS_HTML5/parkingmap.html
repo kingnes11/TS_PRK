@@ -245,7 +245,7 @@
 
   /* ===== 주소 생성기 ===== */
   function buildWMSUrl(minX,minY,maxX,maxY){
-    return `https:/map.vworld.kr/req/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0`
+    return `https://map.vworld.kr/req/wms?SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0`
       + `&LAYERS=lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun`
       + `&STYLES=lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line`
       + `&CRS=EPSG:900913&BBOX=${minX},${minY},${maxX},${maxY}`
@@ -274,7 +274,7 @@
     /* ---- 베이스맵: VWorld WMTS → 실패 시 OSM ---- */
     const vwBase = new ol.layer.Tile({
       source: new ol.source.XYZ({
-        url: `https://map.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
+        url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
         maxZoom: 18, minZoom: 5
       }),
       zIndex: 0, visible: true
@@ -305,7 +305,7 @@
     /* ---- 지번경계: WMS(CBND) → 실패 시 WFS(lt_c_uq111) ---- */
     const cbnd = new ol.layer.Tile({
       source: new ol.source.TileWMS({
-        url: 'https://api.vworld.kr/req/wms',
+        url: 'https://map.vworld.kr/req/wms',
         params: {
           SERVICE:'WMS', REQUEST:'GetMap', VERSION:'1.3.0',
           LAYERS:'lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun',
