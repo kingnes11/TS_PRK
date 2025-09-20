@@ -244,21 +244,27 @@
     map.addLayer(cbndWms);
 
     // ---- 폴백 WFS(JSON) : lt_c_uq111 (BBOX on-demand) ----
-    const VW_WFS_JSON = 'https://map.vworld.kr/js/wfs.do';
-    const UQ111_FIELDS = 'mnum,sido_cd,sigungu_cd,dyear,dnum,ucode,bon_bun,bu_bun,uname,sido_name,sigg_name,ag_geom';
-    function buildUq111Url(ext){
-      const qs = new URLSearchParams({
-        SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
-        TYPENAME:'lt_c_uq111',
-        BBOX: ext.join(','), SRSNAME:'EPSG:900913',
-        MAXFEATURES:'400',
-        PROPERTYNAME: UQ111_FIELDS,
-        OUTPUT:'application/json',
-        EXCEPTIONS:'text/xml',
-        APIKEY: VW_KEY, DOMAIN: DOMAIN
-      });
-      return `${VW_WFS_JSON}?${qs.toString()}`;
-    }
+    // 변경
+const VW_WFS_JSON = 'https://api.vworld.kr/req/wfs';  // ← CORS 허용 엔드포인트
+const UQ111_FIELDS = 'mnum,sido_cd,sigungu_cd,dyear,dnum,ucode,bon_bun,bu_bun,uname,sido_name,sigg_name,ag_geom';
+function buildUq111Url(ext){
+  const qs = new URLSearchParams({
+    SERVICE:'WFS',
+    REQUEST:'GetFeature',
+    VERSION:'1.1.0',
+    TYPENAME:'lt_c_uq111',                 // 소문자 유지
+    BBOX: ext.join(','),                   // minx,miny,maxx,maxy (EPSG:900913)
+    SRSNAME:'EPSG:900913',
+    MAXFEATURES:'400',
+    PROPERTYNAME: UQ111_FIELDS,
+    OUTPUT:'application/json',             // JSON (GML/JSONP 아님)
+    EXCEPTIONS:'text/xml',
+    KEY: VW_KEY,                           // ← APIKEY가 아니라 KEY
+    DOMAIN: DOMAIN                         // ← DOMAIN
+  });
+  return `${VW_WFS_JSON}?${qs.toString()}`;
+}
+
     const parcelStyle = new ol.style.Style({
       stroke:new ol.style.Stroke({ color:[239,68,68,0.95], width:2 }),
       fill:  new ol.style.Fill({ color:[239,68,68,0.06] })
