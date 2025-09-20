@@ -274,7 +274,7 @@
     /* ---- 베이스맵: VWorld WMTS → 실패 시 OSM ---- */
     const vwBase = new ol.layer.Tile({
       source: new ol.source.XYZ({
-        url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
+        url: `https://map.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
         maxZoom: 18, minZoom: 5
       }),
       zIndex: 0, visible: true
