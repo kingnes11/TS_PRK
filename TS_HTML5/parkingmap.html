@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행) · 에러로그(URL)</title>
+<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행) · 에러로그(URL, 최소화)</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
@@ -24,6 +24,7 @@
   .title{font-weight:800}
   .muted{color:var(--muted)}
   .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
+  .btnsm{ border:1px solid var(--border); background:#0b1530; color:#c7d2fe; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700 }
 
   /* 2열 그리드 카드 + 스크롤(높이는 JS로 ‘2행’만 보이도록 동적 제한) */
   .list{overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0c1530; padding:8px}
@@ -49,7 +50,11 @@
   .time{ color:#9ca3af; margin-right:6px }
   .lvl{ color:#fca5a5; font-weight:800; margin-right:6px }
   .url{ color:#60a5fa; word-break:break-all }
-  .btnsm{ border:1px solid var(--border); background:#0b1530; color:#c7d2fe; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700 }
+
+  /* 최소화 상태 */
+  .bottom.collapsed .row.tools,
+  .bottom.collapsed .list { display:none }
+  .errdock.collapsed .body { display:none }
 
   /* 반응형 */
   @media (max-width:480px){
@@ -63,11 +68,12 @@
 
 <!-- 하단 리스트 패널 -->
 <section class="bottom" id="bottom">
-  <div class="row">
+  <div class="row head">
     <div class="title">더미 주차장 10</div>
     <div class="muted" id="stat" style="margin-left:auto">초기화 중…</div>
+    <button class="btnsm" id="minBottom" aria-expanded="true" title="리스트 최소화">▽</button>
   </div>
-  <div class="row">
+  <div class="row tools">
     <button class="btn" id="gotoBtn">현재 위치로 이동</button>
     <button class="btn" id="reLocBtn">위치 재측정</button>
     <button class="btn" id="fitBtn">전체 보기</button>
@@ -83,6 +89,7 @@
     <div class="title">오류 로그(에러만)</div>
     <div class="muted" id="errcount">0건</div>
     <div style="flex:1"></div>
+    <button class="btnsm" id="minErr" aria-expanded="true" title="오류창 최소화">▽</button>
     <button class="btnsm" id="copyErr">복사</button>
     <button class="btnsm" id="clearErr">지우기</button>
   </div>
@@ -98,8 +105,7 @@
   const WFS_API= 'https://api.vworld.kr/req/wfs';
   const WMTS   = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
 
-  // ★ 동일 위치로 간주할 임계치(m) — 필요 시 변경
-  const SAME_POS_M = 20;
+  const SAME_POS_M = 20; // 동일 위치 판정 임계치
 
   const $ = (s)=>document.querySelector(s);
   const stat = $('#stat');
@@ -269,22 +275,21 @@
       });
     });
 
-    // ▶ 리스트 높이: 카드 2행만 보이도록 동적 제한
-    adjustListHeight();
+    adjustListHeight(); // 2행 유지
   }
 
   function adjustListHeight(){
     const grid = $('#list');
     const wrap = $('#listWrap');
     const first = grid.querySelector('.card');
-    if(!first){ wrap.style.maxHeight = '0px'; placeErrdock(); return; }
-
+    if(!first || $('#bottom').classList.contains('collapsed')){
+      wrap.style.maxHeight = '0px'; placeErrdock(); return;
+    }
     const cardH = first.getBoundingClientRect().height;
     const gap = parseFloat(getComputedStyle(grid).gap) || 8;
     const visibleRows = 2;
     const padding = 8*2;
     const maxH = cardH * visibleRows + gap * (visibleRows - 1) + padding;
-
     wrap.style.maxHeight = Math.ceil(maxH) + 'px';
     placeErrdock();
   }
@@ -383,7 +388,6 @@
 
   document.getElementById('gotoBtn').onclick = gotoCurrent; // 이동 전용
   document.getElementById('reLocBtn').onclick = ()=> locate(true); // 재측정
-
   document.getElementById('fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
@@ -391,25 +395,43 @@
     if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,calcBottomPad(),20], maxZoom:17});
   };
 
-  /* === 오류창 위치 보정 === */
+  /* === 최소화 토글 및 오류창 위치 보정 === */
   const errdock = $('#errdock');
+  const bottom  = $('#bottom');
+  const btnMinBottom = $('#minBottom');
+  const btnMinErr    = $('#minErr');
+
   function calcBottomPad(){
-    const b = $('#bottom');
-    return Math.ceil(b.getBoundingClientRect().height + 20);
+    return Math.ceil(bottom.getBoundingClientRect().height + 20);
   }
   function placeErrdock(){
-    const b = $('#bottom');
-    const h = b.getBoundingClientRect().height;
+    const h = bottom.getBoundingClientRect().height;
     errdock.style.bottom = (h + 12) + 'px';
   }
+  function toggleBottom(){
+    const collapsed = bottom.classList.toggle('collapsed');
+    btnMinBottom.setAttribute('aria-expanded', String(!collapsed));
+    btnMinBottom.textContent = collapsed ? '△' : '▽';
+    adjustListHeight();
+    placeErrdock();
+  }
+  function toggleErr(){
+    const collapsed = errdock.classList.toggle('collapsed');
+    btnMinErr.setAttribute('aria-expanded', String(!collapsed));
+    btnMinErr.textContent = collapsed ? '△' : '▽';
+    placeErrdock();
+  }
+  btnMinBottom.onclick = toggleBottom;
+  btnMinErr.onclick = toggleErr;
 
   // 리사이징/회전 시 리스트 2행 유지 + 오류창 위치 보정
   const ro = new ResizeObserver(()=>{ adjustListHeight(); placeErrdock(); });
-  ro.observe($('#bottom'));
+  ro.observe(bottom);
   window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
   window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
-  // 부팅: 한 번 측위하여 초기 위치+더미 10개 세팅
+  // 부팅: 한 번 측위하여 초기 위치+더미 10개 세팅, 위치 보정
+  placeErrdock();
   locate(true);
 })();
 </script>
