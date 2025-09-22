@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>경계(WFS JSONP 타일+캐시) · VWorld WMTS만 · 더미10(2행 리스트) · 최소화버튼 · 에러로그(URL) · 트래픽 절감</title>
+<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10(최초 1회) · 하단리스트(2행) · 최소화 · 에러로그(URL)</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
@@ -90,14 +90,14 @@
 
 <script>
 (function(){
-  /* ===== 상수/설정 ===== */
+  /* ===== 설정 ===== */
   const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82';
   const DOMAIN = 'kingnes11.github.io';
   const SRS    = 'EPSG:900913';
   const WFS_API= 'https://api.vworld.kr/req/wfs';
   const WMTS_URL = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
 
-  // ↓ 트래픽 절감
+  // 트래픽 절감(타일링/캐시)
   const WFS_TILE_SIZE = 512;
   const WFS_DEBOUNCE  = 500;
   const MAX_TILE_CACHE= 150;
@@ -131,12 +131,7 @@
   /* ===== 지도/배경 (WMTS만) ===== */
   const view = new ol.View({ center: ol.proj.fromLonLat([127.5,36.4]), zoom: 7, maxZoom: 18, minZoom: 4 });
   const base = new ol.layer.Tile({
-    source:new ol.source.XYZ({
-      url:WMTS_URL,
-      crossOrigin:'anonymous',
-      tilePixelRatio: 1,
-      transition: 0
-    }),
+    source:new ol.source.XYZ({ url:WMTS_URL, crossOrigin:'anonymous', tilePixelRatio:1, transition:0 }),
     zIndex:0
   });
   const map  = new ol.Map({ target:'map', layers:[base], view });
@@ -145,8 +140,7 @@
   function buildWFSUrlJSONP(typename, bbox, cbName){
     const p = new URLSearchParams({
       SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
-      TYPENAME: typename,
-      SRSNAME: SRS,
+      TYPENAME: typename, SRSNAME: SRS,
       BBOX: bbox.join(','), MAXFEATURES:'1000',
       OUTPUT:'text/javascript', EXCEPTIONS:'text/xml',
       KEY: VW_KEY, DOMAIN: DOMAIN,
@@ -272,7 +266,7 @@
   });
   [lySido,lySigg,lyEmd,lyRi].forEach(refreshAdminLayerTiled);
 
-  /* ===== 더미 주차장 10 & 하단 리스트(2행) ===== */
+  /* ===== 더미 주차장 10 (처음 1회만 생성) ===== */
   const RADIUS_KM=3;
   const prkSrc=new ol.source.Vector(), prkLy=new ol.layer.Vector({ source:prkSrc, zIndex:120 });
   const P_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
@@ -290,7 +284,6 @@
     }
     return out.sort((a,b)=>a.dist-b.dist);
   }
-
   const rowsState = { rows:[], byId:new Map() };
   function rebuildListRows(rows){
     rowsState.rows = rows; rowsState.byId.clear(); rows.forEach(r=>rowsState.byId.set(r.id,r));
@@ -309,20 +302,6 @@
       });
     });
     adjustListHeight();
-  }
-  function adjustListHeight(){
-    if(listMin){ $('#listWrap').style.maxHeight = '0px'; placeErrdock(); return; }
-    const grid = $('#list');
-    const wrap = $('#listWrap');
-    const first = grid.querySelector('.card');
-    if(!first){ wrap.style.maxHeight = '0px'; placeErrdock(); return; }
-    const cardH = first.getBoundingClientRect().height;
-    const gap = parseFloat(getComputedStyle(grid).gap) || 8;
-    const visibleRows = 2;
-    const padding = 8*2;
-    const maxH = cardH * visibleRows + gap * (visibleRows - 1) + padding;
-    wrap.style.maxHeight = Math.ceil(maxH) + 'px';
-    placeErrdock();
   }
   function setDummyOn(lng,lat){
     prkSrc.clear();
@@ -359,59 +338,73 @@
     if(!hit) closePopup();
   });
 
-  /* ===== 현재 위치 (버튼 누르면 반드시 지도 이동) ===== */
+  /* ===== 현재 위치: 버튼은 '이동만', 자동 1회만 더미 시드 ===== */
   const meSrc=new ol.source.Vector(), meLy=new ol.layer.Vector({ source:meSrc, zIndex:130 }); map.addLayer(meLy);
   const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const stME=new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(ME_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' }) });
 
-  let lastMe = null; // 마지막 위치 저장(동일 좌표면 더미 재생성 생략)
+  let lastMe = null;   // 마지막 위치
+  let seeded = false;  // 더미 시드 여부(최초 1회만)
 
+  function setMeMarker(lng,lat,fly=true){
+    meSrc.clear();
+    const f=new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat])) }); f.setStyle(stME); meSrc.addFeature(f);
+    if(fly){ view.animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); }
+  }
   function inKorea(lng, lat){ return lng>124 && lng<132 && lat>32 && lat<39; }
   function coerceLngLat(rawLng, rawLat){
     let lng = Number(rawLng), lat = Number(rawLat);
-    const looksSwapped =
-      (Math.abs(lng) <= 90 && Math.abs(lat) > 90) ||
-      (!inKorea(lng, lat) && inKorea(lat, lng));
+    const looksSwapped = (Math.abs(lng) <= 90 && Math.abs(lat) > 90) || (!inKorea(lng, lat) && inKorea(lat, lng));
     if(looksSwapped){
       const t = lng; lng = lat; lat = t;
       logERR('현재위치 좌표 스왑 보정','', `수신(lng,lat)=(${rawLng}, ${rawLat}) → 보정(${lng}, ${lat})`);
     }
     return { lng, lat };
   }
-  function setMe(lng,lat,fly=true){
-    const fixed = coerceLngLat(lng,lat);
-    lng = fixed.lng; lat = fixed.lat;
 
-    const same = lastMe && Math.abs(lastMe.lng-lng)<1e-7 && Math.abs(lastMe.lat-lat)<1e-7;
-    lastMe = {lng,lat};
-
-    meSrc.clear();
-    const f=new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat])) }); f.setStyle(stME); meSrc.addFeature(f);
-    if(fly){ view.animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); }
-    if(!same) setDummyOn(lng,lat);   // 동일 좌표면 더미 재생성 생략
-    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-  }
-  function locate(fly=true){
+  // 자동 위치: 더미를 '처음 1회만' 시드
+  function autoLocateAndSeed(){
     const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-    if(!httpsOk || !navigator.geolocation){
-      if(lastMe){ // 권한/환경 불가 시 마지막 위치로만 이동
-        view.animate({center:ol.proj.fromLonLat([lastMe.lng,lastMe.lat]), zoom:15, duration:400});
-        ok('마지막 위치로 이동');
-      }else{
-        warn('위치 권한/환경 문제(HTTPS 필요)');
-      }
-      return;
-    }
+    if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
     const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
     navigator.geolocation.getCurrentPosition(
-      p=> setMe(p.coords.longitude, p.coords.latitude, fly), // ★ fly=true면 지도 이동
-      e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
+      p=>{
+        const fixed = coerceLngLat(p.coords.longitude, p.coords.latitude);
+        lastMe = {lng:fixed.lng, lat:fixed.lat};
+        setMeMarker(fixed.lng, fixed.lat, true);
+        if(!seeded){ setDummyOn(fixed.lng, fixed.lat); seeded=true; }
+        ok(`현재 위치 반영됨 · ${fixed.lat.toFixed(5)}, ${fixed.lng.toFixed(5)}`);
+      },
+      e=> { logERR('geolocation 실패(자동)','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
     );
   }
 
-  // ★ 버튼 클릭 시 반드시 지도도 이동하도록 fly=true
-  $('#locBtn').onclick=()=> locate(true);
+  // 버튼 위치: 더미 재생성 없이 '지도만 이동'
+  function moveToLastOrLocate(){
+    if(lastMe){
+      setMeMarker(lastMe.lng, lastMe.lat, true); // 이동만
+      ok('현재 위치로 이동');
+      return;
+    }
+    // 아직 lastMe 없으면 1회 측위(이동만, 더미 X)
+    const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
+    if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
+    const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
+    navigator.geolocation.getCurrentPosition(
+      p=>{
+        const fixed = coerceLngLat(p.coords.longitude, p.coords.latitude);
+        lastMe = {lng:fixed.lng, lat:fixed.lat};
+        setMeMarker(fixed.lng, fixed.lat, true); // 이동만
+        ok(`현재 위치로 이동 · ${fixed.lat.toFixed(5)}, ${fixed.lng.toFixed(5)}`);
+      },
+      e=> { logERR('geolocation 실패(버튼)','', `${e.code} ${e.message}`); warn('위치 실패'); },
+      opt
+    );
+  }
+
+  // 버튼 핸들러: 더미 재생성 없이 지도만 이동
+  $('#locBtn').onclick=()=> moveToLastOrLocate();
 
   $('#fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
@@ -432,13 +425,28 @@
     adjustListHeight(); placeErrdock();
   };
 
+  function adjustListHeight(){
+    if(listMin){ $('#listWrap').style.maxHeight = '0px'; placeErrdock(); return; }
+    const grid = $('#list');
+    const wrap = $('#listWrap');
+    const first = grid.querySelector('.card');
+    if(!first){ wrap.style.maxHeight = '0px'; placeErrdock(); return; }
+    const cardH = first.getBoundingClientRect().height;
+    const gap = parseFloat(getComputedStyle(grid).gap) || 8;
+    const visibleRows = 2;
+    const padding = 8*2;
+    const maxH = cardH * visibleRows + gap * (visibleRows - 1) + padding;
+    wrap.style.maxHeight = Math.ceil(maxH) + 'px';
+    placeErrdock();
+  }
+
   const ro = new ResizeObserver(()=>{ adjustListHeight(); placeErrdock(); });
   ro.observe($('#bottom'));
   window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
   window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
-  // 부팅 시 한 번 자동 위치 시도(지도 이동 포함)
-  locate(true);
+  // 부팅: 자동 위치 한 번 → 더미 10개 최초 1회만 생성
+  autoLocateAndSeed();
 })();
 </script>
 </body>
