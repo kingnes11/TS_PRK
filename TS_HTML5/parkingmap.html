@@ -3,152 +3,68 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>VWorld 행정구역(WFS) · JSON→JSONP 폴백 · 에러로그(URL) · OL 10.6.1</title>
+<title>행정구역(시도/시군구/읍면동/리) WFS(JSONP전용) + cbnd WMS · 에러로그(호출 URL 포함) · OL 10.6.1</title>
 
-<!-- OpenLayers 동적 로더 (로컬 → CDN 폴백) -->
+<!-- OpenLayers 동적 로더 (CDN) -->
 <script>
 (function(){
-  const basePath = location.pathname.replace(/\/[^/]*$/, '');
-  const localCSS = basePath + '/vendor/ol/10.6.1/ol.css';
-  const localJS  = basePath + '/vendor/ol/10.6.1/ol.js';
-  const repoCSS  = '/TS_PRK/TS_HTML5/vendor/ol/10.6.1/ol.css';
-  const repoJS   = '/TS_PRK/TS_HTML5/vendor/ol/10.6.1/ol.js';
-
-  const cssSrcs = [
-    localCSS, repoCSS,
-    'https://cdnjs.cloudflare.com/ajax/libs/ol/10.6.1/ol.css',
-    'https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css',
-    'https://unpkg.com/ol@10.6.1/ol.css'
-  ];
-  const jsSrcs = [
-    localJS, repoJS,
-    'https://cdnjs.cloudflare.com/ajax/libs/ol/10.6.1/ol.js',
-    'https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js',
-    'https://unpkg.com/ol@10.6.1/dist/ol.js'
-  ];
-
-  function loadCSS(list, i=0){
-    if(i>=list.length) return;
-    const link=document.createElement('link');
-    link.rel='stylesheet'; link.href=list[i];
-    link.onerror=()=>loadCSS(list, i+1);
-    document.head.appendChild(link);
+  const cssSrcs=['https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css','https://unpkg.com/ol@10.6.1/ol.css'];
+  const jsSrcs =['https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js','https://unpkg.com/ol@10.6.1/dist/ol.js'];
+  function loadCSS(a,i=0){ if(i>=a.length) return; const l=document.createElement('link'); l.rel='stylesheet'; l.href=a[i]; l.onerror=()=>loadCSS(a,i+1); document.head.appendChild(l); }
+  function loadJS(a,i,res,rej){
+    if(i>=a.length) return rej(new Error('OpenLayers JS load failed'));
+    const s=document.createElement('script'); s.src=a[i]; s.defer=false; s.async=false; s.crossOrigin='anonymous';
+    let done=false; const next=()=>{ if(done) return; done=true; s.remove(); loadJS(a,i+1,res,rej); };
+    s.onload=()=> setTimeout(()=> (window.ol&&ol.Map)?(done=true,res(a[i])):next(),0);
+    s.onerror=next; document.head.appendChild(s);
   }
-  function loadJS(list, i, resolve, reject){
-    if(i>=list.length) return reject(new Error('OpenLayers JS load failed (all sources)'));
-    const s=document.createElement('script');
-    s.src=list[i]; s.defer=false; s.async=false; s.crossOrigin='anonymous';
-    let done=false;
-    const next=()=>{ if(done) return; done=true; s.remove(); loadJS(list, i+1, resolve, reject); };
-    s.onload=()=>{ setTimeout(()=>{ (window.ol && typeof ol.Map==='function') ? (done=true, resolve(list[i])) : next(); },0); };
-    s.onerror=next;
-    document.head.appendChild(s);
-  }
-
-  loadCSS(cssSrcs, 0);
-  window.OL_READY = new Promise((resolve,reject)=>{
-    if(window.ol && typeof ol.Map==='function'){ resolve('(preloaded)'); return; }
-    loadJS(jsSrcs, 0, resolve, reject);
-  });
+  loadCSS(cssSrcs);
+  window.OL_READY=new Promise((res,rej)=>{ if(window.ol&&ol.Map){res('(preloaded)');return;} loadJS(jsSrcs,0,res,rej); });
 })();
 </script>
 
 <style>
-  :root{
-    --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --accent:#2563eb;
-    --border:#20304f; --chip:#1f2a44; --chipOn:#243a7a;
-  }
+  :root{ --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --border:#20304f; --accent:#2563eb; }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
-  #map{position:fixed;inset:0}
+  #map{position:fixed; inset:0}
 
-  /* 좌측 패널 */
-  .side{
-    position:fixed; left:12px; top:12px; bottom:12px; width:340px; z-index:30;
+  .side{ position:fixed; left:12px; top:12px; bottom:12px; width:360px; z-index:30;
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px;
-    display:flex; flex-direction:column; gap:10px;
-  }
+    display:flex; gap:10px; flex-direction:column }
   .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
-  .title{font-weight:800; display:flex; gap:10px; align-items:center}
   .muted{color:var(--muted)}
   .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
-  .btn.ghost{background:transparent}
+  .chk{display:flex; gap:10px; flex-direction:column; border:1px solid var(--border); border-radius:10px; padding:8px}
+  .chk label{display:flex; align-items:center; gap:8px; cursor:pointer}
+  .legend{display:flex; flex-direction:column; gap:6px; border:1px dashed var(--border); border-radius:10px; padding:8px}
+  .legend .sw{width:14px;height:14px;border-radius:2px;display:inline-block;margin-right:6px;vertical-align:-2px}
+  .legend .sido{background:#60a5fa}
+  .legend .sigg{background:#22d3ee}
+  .legend .emd{background:#a78bfa}
+  .legend .ri{background:#34d399}
 
-  .list{overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height:140px; background:#0c1530}
-  .item{padding:10px 12px; border-bottom:1px solid var(--border); display:grid; gap:4px}
-  .item:last-child{border-bottom:0}
-  .item .nm{font-weight:700}
-  .item .sub{color:var(--muted); font-size:.92rem; display:flex; gap:6px; flex-wrap:wrap}
-
-  .legend{display:grid; gap:6px}
-  .lgrow{display:flex; align-items:center; gap:10px}
-  .chip{width:16px;height:16px;border-radius:3px;border:1px solid #fff2}
-  .lg-t{font-weight:700}
-  .chk{accent-color:#60a5fa}
-
-  /* 팝업 */
-  .ol-popup{
-    position:absolute;background:#fff;color:#111827;border-radius:8px;border:1px solid #e5e7eb;
-    min-width:240px;padding:10px 12px;transform:translate(-50%,-110%);box-shadow:0 10px 20px rgba(0,0,0,.25);pointer-events:auto
-  }
-  .ol-popup:after{
-    content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-10px;width:0;height:0;border:10px solid transparent;border-top-color:#fff;filter:drop-shadow(0 -1px 0 #e5e7eb)
-  }
-  .ol-popup .tit{font-weight:800;margin-right:26px}
-  .ol-popup .sub2{color:#4b5563;font-size:.9rem}
-  .ol-popup .x{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#6b7280;font-size:18px;cursor:pointer;line-height:1}
-
-  /* 오류 로그 도크 + FAB (에러만) */
-  .errdock{
-    position:fixed; right:12px; bottom:68px; z-index:1000;
-    width:min(560px, calc(100% - 24px));
-    background:#0f172a; border:1px solid var(--border); border-radius:12px;
-    box-shadow:0 10px 30px rgba(0,0,0,.35);
-    display:none; flex-direction:column;
-  }
+  /* 오류 로그 (ERR만 표시) */
+  .errdock{ position:fixed; right:12px; bottom:68px; z-index:1000; width:min(560px, calc(100% - 24px));
+    background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+    display:none; flex-direction:column; }
   .errdock.open{ display:flex }
   .errdock .hdr{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border) }
   .errdock .title{ font-weight:800 }
-  .errdock .grow{ flex:1 }
-  .errdock .body{
-    max-height:38vh; overflow:auto; padding:8px 10px;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.86rem;
-    background:#0b1220
-  }
-  .logrow{ border-bottom:1px dashed #1d2741; padding:4px 0 }
-  .logrow:last-child{ border-bottom:0 }
-  .time{ color:#9ca3af; margin-right:6px }
-  .lvl{ font-weight:800; margin-right:6px; color:#fca5a5 }
+  .errdock .body{ max-height:38vh; overflow:auto; padding:8px 10px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.86rem; background:#0b1220 }
+  .logrow{ border-bottom:1px dashed #1d2741; padding:6px 0 } .logrow:last-child{ border-bottom:0 }
+  .time{ color:#9ca3af; margin-right:6px } .lvl{ font-weight:800; margin-right:6px; color:#fca5a5 }
   .btnsm{ border:1px solid var(--border); background:#0b1530; color:#c7d2fe; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700 }
   .btnsm.red{ background:#391d1d; border-color:#5c2a2a; color:#fecaca }
-
-  .errfab{
-    position:fixed; right:12px; bottom:12px; z-index:1001;
-    background:#1e293b; color:#e5e7eb; border:1px solid #334155; border-radius:999px;
-    padding:10px 14px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:8px;
-    box-shadow:0 8px 20px rgba(0,0,0,.35)
-  }
+  .errfab{ position:fixed; right:12px; bottom:12px; z-index:1001; background:#1e293b; color:#e5e7eb; border:1px solid #334155; border-radius:999px; padding:10px 14px; font-weight:800; cursor:pointer; display:flex; align-items:center; gap:8px; box-shadow:0 8px 20px rgba(0,0,0,.35) }
   .errfab .dot{width:10px;height:10px;border-radius:50%;background:#10b981}
   .errfab.error .dot{background:#ef4444}
   .errfab .cnt{background:#ef4444;color:#fff;border-radius:999px;padding:2px 8px;font-size:.82rem;display:none}
   .errfab.error .cnt{display:inline-block}
 
-  /* 반응형 */
-  @media (max-width:380px){
+  @media (max-width:420px){
     .side{ left:8px; right:8px; width:auto; top:8px; bottom:auto; max-height:62vh; overflow:auto }
-    .list{ min-height:120px; max-height:40vh }
     .errdock{ left:8px; right:8px; width:auto }
-  }
-  @media (min-width:381px) and (max-width:480px){
-    .side{ left:10px; right:10px; width:auto; top:10px; bottom:auto; max-height:64vh; overflow:auto }
-    .list{ min-height:140px; max-height:42vh }
-    .errdock{ left:10px; right:10px; width:auto }
-  }
-  @media (min-width:481px) and (max-width:768px){
-    .side{ width:360px; top:10px; bottom:10px }
-    .list{ min-height:160px }
-  }
-  @media (min-width:769px) and (max-width:1024px){
-    .side{ width:400px }
   }
 </style>
 </head>
@@ -157,37 +73,31 @@
 
 <!-- 좌측 패널 -->
 <aside class="side">
-  <div class="row title">
-    <div>행정구역(시도·시군구·읍면동·리)</div>
-    <div class="muted" style="margin-left:auto" id="stat">초기화 중…</div>
-  </div>
-
+  <div class="row"><b>행정구역 경계(JSONP 전용)</b><span class="muted" id="stat" style="margin-left:auto">초기화 중…</span></div>
   <div class="row">
     <button class="btn" id="locBtn">현재 위치</button>
-    <button class="btn ghost" id="fitBtn">전체 보기</button>
+    <button class="btn" id="fitBtn">전체 보기</button>
   </div>
-
+  <div class="chk" id="layerToggles">
+    <label><input type="checkbox" data-id="sido" checked>시도 (lt_c_adsido_info)</label>
+    <label><input type="checkbox" data-id="sigg" checked>시군구 (lt_c_adsigg_info)</label>
+    <label><input type="checkbox" data-id="emd"  checked>읍면동 (lt_c_ademd_info)</label>
+    <label><input type="checkbox" data-id="ri"   checked>리 (lt_c_adri_info)</label>
+  </div>
   <div class="legend">
-    <label class="lgrow"><input class="chk" type="checkbox" data-layer="sido" checked /> <span class="chip" style="background:#2563eb"></span> <span class="lg-t">시도 (lt_c_adsido_info)</span></label>
-    <label class="lgrow"><input class="chk" type="checkbox" data-layer="sigg" checked /> <span class="chip" style="background:#10b981"></span> <span class="lg-t">시군구 (lt_c_adsigg_info)</span></label>
-    <label class="lgrow"><input class="chk" type="checkbox" data-layer="emd"  checked /> <span class="chip" style="background:#f59e0b"></span> <span class="lg-t">읍면동 (lt_c_ademd_info)</span></label>
-    <label class="lgrow"><input class="chk" type="checkbox" data-layer="ri"   checked /> <span class="chip" style="background:#ef4444"></span> <span class="lg-t">리 (lt_c_adri_info)</span></label>
-  </div>
-
-  <div class="list" id="attrList" aria-label="선택 속성">
-    <div class="item">
-      <div class="nm">피처를 클릭하면 속성이 나타납니다</div>
-      <div class="sub">표시명은 속성명에 ‘name’ 또는 ‘nm’이 포함된 항목을 우선 사용합니다.</div>
-    </div>
+    <div><span class="sw sido"></span>시도</div>
+    <div><span class="sw sigg"></span>시군구</div>
+    <div><span class="sw emd"></span>읍면동</div>
+    <div><span class="sw ri"></span>리</div>
   </div>
 </aside>
 
-<!-- 오류 로그 도크 + FAB (에러만) -->
+<!-- 오류 로그 도크 + FAB (ERR만) -->
 <section class="errdock" id="errdock" aria-label="오류 로그">
   <div class="hdr">
     <div class="title">오류 로그</div>
     <div class="muted" id="errcount">0건</div>
-    <div class="grow"></div>
+    <div style="flex:1"></div>
     <button class="btnsm" id="copyErr">복사</button>
     <button class="btnsm red" id="clearErr">지우기</button>
     <button class="btnsm" id="closeErr">닫기</button>
@@ -200,288 +110,185 @@
 
 <script>
 (function(){
-  /* ===== 기본 설정 ===== */
-  const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82';
-  const DOMAIN = 'kingnes11.github.io';
-  const WFS_API = 'https://api.vworld.kr/req/wfs';
-  const SRS = 'EPSG:900913'; // == EPSG:3857
+  /* ===== 설정 ===== */
+  const VW_KEY  = 'CF9A371B-35A6-3822-8315-6592C8342E82';
+  const DOMAIN  = 'kingnes11.github.io';
+  const SRS     = 'EPSG:900913';
+  const MAXFEATURES = 1000;
 
-  const ADMIN_LAYERS = [
-    { id:'sido', title:'시도',   typename:'lt_c_adsido_info', color:[37,99,235],   width:2 },
-    { id:'sigg', title:'시군구', typename:'lt_c_adsigg_info', color:[16,185,129],  width:2 },
-    { id:'emd',  title:'읍면동', typename:'lt_c_ademd_info',  color:[245,158,11],  width:1.8 },
-    { id:'ri',   title:'리',     typename:'lt_c_adri_info',   color:[239,68,68],   width:1.5 }
-  ];
-
+  /* ===== 오류 로그(에러만, URL 포함) ===== */
   const $ = (s)=>document.querySelector(s);
-  const stat = $('#stat');
-  const ok   = (m)=> stat.innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
-  const warn = (m)=> stat.innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
-
-  /* ===== 오류 로그(UI에는 ERR만) ===== */
-  const ERRUI = (function(){
-    let dock = $('#errdock'), body = $('#errbody'), count= $('#errcount');
-    let fab  = $('#errFab'), cntFab = $('#errCntFab');
-
-    $('#closeErr').onclick = ()=>{ dock.classList.remove('open'); fab.setAttribute('aria-expanded','false'); };
-    $('#clearErr').onclick = ()=>{ body.innerHTML=''; count.textContent='0건'; cntFab.textContent='0'; fab.classList.remove('error'); };
-    $('#copyErr').onclick  = async ()=>{
-      const txt = Array.from(body.querySelectorAll('.logrow')).map(el=>el.innerText).join('\n');
-      try{ await navigator.clipboard.writeText(txt||'(로그 없음)'); }catch(e){}
-    };
-    fab.onclick = ()=>{
-      const opened = dock.classList.toggle('open');
-      fab.setAttribute('aria-expanded', String(opened));
-    };
-    return { body, count, fab, cntFab };
-  })();
-  const lastErrTime = new Map(); // 중복 억제
-  function logERR(msg, extra){
-    const now = Date.now(), key = msg;
-    const prev = lastErrTime.get(key)||0;
-    if(now - prev < 1200) return; // 같은 에러 스팸 방지
-    lastErrTime.set(key, now);
-
-    const row = document.createElement('div');
-    row.className='logrow';
-    row.innerHTML = `<span class="time">[${new Date().toLocaleTimeString()}]</span><span class="lvl">ERR</span> ${msg}` +
-                    (extra ? `<div class="muted" style="margin-left:8px;white-space:pre-wrap">${extra}</div>` : '');
-    ERRUI.body.appendChild(row);
-    ERRUI.body.scrollTop = ERRUI.body.scrollHeight;
-
-    const n = (Number(ERRUI.cntFab.textContent)||0)+1;
-    ERRUI.cntFab.textContent = String(n);
-    ERRUI.fab.classList.add('error');
-    ERRUI.count.textContent = `${ERRUI.body.querySelectorAll('.logrow').length}건`;
+  const ERR_THROTTLE_MS=1500, lastErr=new Map();
+  const ERRUI=(function(){const d=$('#errdock'),f=$('#errFab'),c=$('#errCntFab'),b=$('#errbody'),n=$('#errcount');
+    $('#closeErr').onclick=()=>{d.classList.remove('open');f.setAttribute('aria-expanded','false');};
+    $('#clearErr').onclick=()=>{b.innerHTML='';n.textContent='0건';c.textContent='0';f.classList.remove('error');};
+    $('#copyErr').onclick=async()=>{const t=[...b.querySelectorAll('.logrow')].map(x=>x.innerText).join('\n'); try{await navigator.clipboard.writeText(t||'(로그 없음)');}catch(e){}};
+    f.onclick=()=>{const o=d.classList.toggle('open'); f.setAttribute('aria-expanded',String(o));};
+    return{d,f,c,b,n};})();
+  function tstr(){return new Date().toLocaleTimeString();}
+  function logERR(title, extra){
+    const key=title+(extra?('::'+extra.slice(0,120)):''); const now=Date.now(); const prev=lastErr.get(key)||0;
+    if(now-prev<ERR_THROTTLE_MS) return; lastErr.set(key,now);
+    const row=document.createElement('div'); row.className='logrow';
+    row.innerHTML=`<span class="time">[${tstr()}]</span><span class="lvl">ERR</span> ${title}`+(extra?`<div class="muted" style="white-space:pre-wrap;margin-top:4px">${extra}</div>`:'');
+    ERRUI.b.appendChild(row); ERRUI.b.scrollTop=ERRUI.b.scrollHeight;
+    const c=(+ERRUI.c.textContent||0)+1; ERRUI.c.textContent=String(c); ERRUI.f.classList.add('error');
+    ERRUI.n.textContent=`${ERRUI.b.querySelectorAll('.logrow').length}건`;
   }
-  window.addEventListener('error', (e)=> logERR('window.onerror: '+e.message, (e.error&&e.error.stack)||''));
-  window.addEventListener('unhandledrejection', (e)=> logERR('unhandledrejection', String(e.reason||'')));
+  window.addEventListener('error', e=>logERR('window.onerror: '+e.message, (e?.filename||'')+(e?.lineno?('\n'+e.lineno+':'+e.colno):'')));
+  window.addEventListener('unhandledrejection', e=>logERR('unhandledrejection', String(e.reason||'')));
 
-  /* ===== URL 빌더 (JSON → JSONP(GeoJSON)) ===== */
-  function buildWFSUrlJSON(typename, bbox){
-    const p = new URLSearchParams({
-      SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
-      TYPENAME: typename,
-      SRSNAME: SRS,
-      BBOX: bbox.join(','),       // 900913: xmin,ymin,xmax,ymax
-      MAXFEATURES:'1000',
-      OUTPUT:'application/json',
-      EXCEPTIONS:'text/xml',
-      KEY: VW_KEY, DOMAIN: DOMAIN
-    });
-    return `${WFS_API}?${p.toString()}`;
+  /* ===== URL 빌더 ===== */
+  const WMS_API='https://api.vworld.kr/req/wms';
+  function buildWMSUrlForLog(bbox){
+    const p=new URLSearchParams({
+      SERVICE:'WMS',REQUEST:'GetMap',VERSION:'1.3.0',
+      LAYERS:'lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun',
+      STYLES:'lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line',
+      CRS:SRS,BBOX:bbox.join(','),WIDTH:'256',HEIGHT:'256',
+      FORMAT:'image/png',TRANSPARENT:'false',BGCOLOR:'0xFFFFFF',EXCEPTIONS:'text/xml',
+      KEY:VW_KEY,DOMAIN:DOMAIN
+    }); return `${WMS_API}?${p.toString()}`;
   }
+
+  const WFS_API='https://api.vworld.kr/req/wfs';
+  // ★ JSONP 전용(GeoJSON) : output=text/javascript & format_options=callback:NAME
   function buildWFSUrlJSONP(typename, bbox, cbName){
-    const p = new URLSearchParams({
-      SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
-      TYPENAME: typename,
-      SRSNAME: SRS,
-      BBOX: bbox.join(','),
-      MAXFEATURES:'1000',
-      OUTPUT:'text/javascript',                 // ✅ JSONP(GeoJSON)
+    const p=new URLSearchParams({
+      SERVICE:'WFS',REQUEST:'GetFeature',VERSION:'1.1.0',
+      TYPENAME:typename,SRSNAME:SRS,BBOX:bbox.join(','),
+      MAXFEATURES:String(MAXFEATURES),
+      OUTPUT:'text/javascript',
       EXCEPTIONS:'text/xml',
-      'format_options': `callback:${cbName}`,   // ✅ 콜백 지정
-      KEY: VW_KEY, DOMAIN: DOMAIN
-    });
-    return `${WFS_API}?${p.toString()}`;
+      'format_options':`callback:${cbName}`,
+      KEY:VW_KEY,DOMAIN:DOMAIN
+    }); return `${WFS_API}?${p.toString()}`;
   }
   function jsonpCall(url, cbName, onPayload, timeoutMs=12000){
     return new Promise((resolve,reject)=>{
-      const s = document.createElement('script');
-      let done=false;
-      const timer=setTimeout(()=>{
-        if(done) return; done=true;
-        s.remove(); delete window[cbName];
-        reject(new Error('jsonp_timeout'));
-      }, timeoutMs);
-      window[cbName] = (payload)=>{
-        if(done) return; done=true;
-        clearTimeout(timer); s.remove(); delete window[cbName];
+      const s=document.createElement('script'); let done=false;
+      const timer=setTimeout(()=>{ if(done) return; done=true; s.remove(); delete window[cbName]; reject(new Error('jsonp_timeout')); }, timeoutMs);
+      window[cbName]=(payload)=>{ if(done) return; done=true; clearTimeout(timer); s.remove(); delete window[cbName];
         try{ onPayload(payload); resolve(); }catch(e){ reject(e); }
       };
-      s.src=url;
-      s.onerror=()=>{
-        if(done) return; done=true;
-        clearTimeout(timer); s.remove(); delete window[cbName];
-        reject(new Error('JSONP script_error\n'+url));
-      };
+      s.src=url; s.onerror=()=>{ if(done) return; done=true; clearTimeout(timer); s.remove(); delete window[cbName]; reject(new Error('JSONP script_error\n'+url)); };
       document.head.appendChild(s);
     });
   }
 
-  /* ===== 앱 시작 ===== */
-  function start(){
-    ok('OpenLayers 10.6.1 로드 완료');
+  /* ===== 앱 ===== */
+  const stat=$('#stat'); const ok=(m)=>stat.innerHTML=`<span style="color:#10b981">✔</span> ${m}`; const warn=(m)=>stat.innerHTML=`<span style="color:#f59e0b">!</span> ${m}`;
 
-    const map = new ol.Map({
-      target:'map',
-      layers:[
-        new ol.layer.Tile({ source:new ol.source.OSM({crossOrigin:'anonymous'}) })
-      ],
-      view: new ol.View({
-        center: ol.proj.fromLonLat([127.5,36.4]),
-        zoom: 7,
-        maxZoom: 18,
-        minZoom: 4
-      })
+  function startApp(){
+    ok('OpenLayers 10.6.1 로드');
+
+    const view=new ol.View({center:ol.proj.fromLonLat([127.5,36.4]), zoom:7, maxZoom:18, minZoom:4});
+    const map =new ol.Map({target:'map', layers:[ new ol.layer.Tile({source:new ol.source.OSM(), zIndex:0}) ], view});
+
+    // cbnd WMS
+    const wmsSource=new ol.source.TileWMS({
+      url:WMS_API,
+      params:{
+        SERVICE:'WMS',REQUEST:'GetMap',VERSION:'1.3.0',
+        LAYERS:'lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun',
+        STYLES:'lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line',
+        CRS:SRS,FORMAT:'image/png',TRANSPARENT:false,BGCOLOR:'0xFFFFFF',
+        KEY:VW_KEY,DOMAIN:DOMAIN
+      },
+      crossOrigin:'anonymous'
+    });
+    const wmsLayer=new ol.layer.Tile({source:wmsSource, zIndex:50, opacity:.9, visible:true});
+    map.addLayer(wmsLayer);
+
+    wmsSource.on('tileloaderror', (evt)=>{
+      try{
+        const img=evt?.tile?.getImage?.(); const src=(img&&img.src)?img.src:'(이미지 src 미확인)';
+        logERR('WMS 타일 오류', src);
+      }catch(e){ logERR('WMS 타일 오류(소스 추출 실패)', String(e?.message||e)); }
     });
 
-    /* ---- 팝업 ---- */
-    const popupEl = document.createElement('div');
-    popupEl.className='ol-popup';
-    popupEl.innerHTML = `<button class="x" aria-label="닫기">×</button><div class="tit"></div><div class="sub2 addr"></div><div class="sub2 meta"></div>`;
-    const overlay = new ol.Overlay({ element: popupEl, positioning:'bottom-center', stopEvent:true, offset:[0,-14] });
-    map.addOverlay(overlay);
-    popupEl.querySelector('.x').addEventListener('click', ()=> overlay.setPosition(undefined));
+    // 행정구역 4종
+    const defs=[
+      { id:'sido', title:'시도',   typename:'lt_c_adsido_info', color:[96,165,250,0.8],  fill:[96,165,250,0.08],  width:2 },
+      { id:'sigg', title:'시군구', typename:'lt_c_adsigg_info', color:[34,211,238,0.85], fill:[34,211,238,0.06], width:2 },
+      { id:'emd',  title:'읍면동', typename:'lt_c_ademd_info',  color:[167,139,250,0.9], fill:[167,139,250,0.05],width:1.75 },
+      { id:'ri',   title:'리',     typename:'lt_c_adri_info',   color:[52,211,153,0.9],  fill:[52,211,153,0.05], width:1.5 }
+    ];
 
-    function bestName(props){
-      const keys = Object.keys(props||{});
-      const cand = keys.filter(k=>/name|nm/i.test(k));
-      if(cand.length) return `${cand[0]}=${props[cand[0]]}`;
-      // 없으면 첫 두 개 키
-      return keys.slice(0,2).map(k=>`${k}=${props[k]}`).join(' · ');
-    }
-
-    map.on('singleclick', (evt)=>{
-      overlay.setPosition(undefined);
-      map.forEachFeatureAtPixel(evt.pixel, (f, layer)=>{
-        const props = {...f.getProperties()}; delete props.geometry;
-        popupEl.querySelector('.tit').textContent = (props.adm_nm || props.name || props.sido_nm || props.sigg_nm || '') || '속성';
-        popupEl.querySelector('.addr').textContent = bestName(props);
-        popupEl.querySelector('.meta').textContent = Object.keys(props).slice(0,6).map(k=>`${k}=${props[k]}`).join(' · ');
-        overlay.setPosition(evt.coordinate);
-        // 좌측 패널 속성 표시
-        const list = $('#attrList');
-        list.innerHTML = `<div class="item"><div class="nm">선택 피처</div><div class="sub">${Object.keys(props).map(k=>`<b>${k}</b>=${props[k]}`).join(' · ')}</div></div>`;
-        return true;
-      }, { layerFilter: ly=>ly && ly.get('isAdmin'), hitTolerance:5 });
-    });
-
-    /* ---- 행정구역 4종 레이어 구성(JSON → JSONP 폴백) ---- */
-    const bboxStrategy = ol.loadingstrategy.bbox;
-    const fmtGeoJSON = new ol.format.GeoJSON();
-    const loadedKeys = new Map(); // layerId -> Set(bboxKey)
+    const loadedKeys=new Map(); // id -> Set(key)
+    const roundExtent=(ex)=>ex.map(v=>Math.round(v));
+    const fmtGeoJSON=new ol.format.GeoJSON();
 
     function makeLayer(def){
-      const src = new ol.source.Vector({
-        strategy: bboxStrategy,
+      const src=new ol.source.Vector({
+        wrapX:true,
+        strategy: ol.loadingstrategy.bbox,
         loader: async (extent, resolution, projection)=>{
+          const key=roundExtent(extent).join(',');
+          const set=loadedKeys.get(def.id)||new Set();
+          if(set.has(key)) return; set.add(key); loadedKeys.set(def.id,set);
+
+          const cb=`vw_cb_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+          const url=buildWFSUrlJSONP(def.typename, roundExtent(extent), cb);
           try{
-            const bbox = extent.slice(0); // 3857 == 900913
-            const key = bbox.join(',');
-            const set = loadedKeys.get(def.id) || new Set();
-            if(set.has(key)) return; // 같은 범위 재요청 방지(간단 캐시)
-            set.add(key); loadedKeys.set(def.id, set);
-
-            // 1) JSON (CORS)
-            const urlJSON = buildWFSUrlJSON(def.typename, bbox);
-            try{
-              const res = await fetch(urlJSON, {mode:'cors'});
-              if(!res.ok) throw new Error('HTTP '+res.status);
-              const data = await res.json();
-              const feats = fmtGeoJSON.readFeatures(data, { dataProjection:SRS, featureProjection:'EPSG:3857' });
-              if(feats && feats.length) src.addFeatures(feats);
-              return;
-            }catch(e){
-              logERR(`WFS 로드 실패(${def.typename})`, urlJSON + '\n' + (e?.stack || e?.message || String(e)));
-            }
-
-            // 2) JSONP(GeoJSON)
-            const cb = `vw_cb_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
-            const urlJP = buildWFSUrlJSONP(def.typename, bbox, cb);
-            try{
-              await jsonpCall(urlJP, cb, (payload)=>{
-                let obj = payload;
-                if(typeof payload==='string'){
-                  try{ obj = JSON.parse(payload); }catch(_){ obj = null; }
-                }
-                if(!obj){ throw new Error('invalid_jsonp_payload'); }
-                const feats = fmtGeoJSON.readFeatures(obj, { dataProjection:SRS, featureProjection:'EPSG:3857' });
-                if(feats && feats.length) src.addFeatures(feats);
-              });
-            }catch(e){
-              logERR(`WFS(JSONP) 로드 실패(${def.typename})`, urlJP + '\n' + (e?.stack || e?.message || String(e)));
-            }
-          }catch(e){
-            logERR(`WFS 로더 예외(${def.typename})`, e?.stack || String(e));
+            await jsonpCall(url, cb, (payload)=>{
+              // vworld JSONP는 GeoJSON 객체를 콜백으로 넘깁니다.
+              const obj=(typeof payload==='string') ? JSON.parse(payload) : payload;
+              const feats=fmtGeoJSON.readFeatures(obj,{dataProjection:SRS, featureProjection:'EPSG:3857'});
+              if(feats?.length) src.addFeatures(feats);
+            });
+          }catch(err){
+            logERR(`WFS(JSONP) 로드 실패(${def.typename})`, url+'\n'+(err?.message||String(err)));
           }
         }
       });
 
-      const ly = new ol.layer.Vector({
-        source: src, zIndex: 100,
-        style: new ol.style.Style({
-          stroke: new ol.style.Stroke({ color:[def.color[0],def.color[1],def.color[2],0.95], width:def.width }),
-          fill:   new ol.style.Fill({   color:[def.color[0],def.color[1],def.color[2],0.04] })
-        })
+      const ly=new ol.layer.Vector({
+        source:src, zIndex:100,
+        style:new ol.style.Style({
+          stroke:new ol.style.Stroke({color:def.color, width:def.width}),
+          fill: new ol.style.Fill({color:def.fill})
+        }),
+        visible:true
       });
-      ly.set('isAdmin', true);
-      ly.set('layerId', def.id);
-      ly.set('layerTitle', def.title);
-      return { layer: ly, source: src };
+      return {src, ly};
     }
 
-    const L = {};
-    ADMIN_LAYERS.forEach(def=>{
-      const made = makeLayer(def);
-      L[def.id] = made;
-      map.addLayer(made.layer);
-    });
+    const layers={};
+    defs.forEach(d=>{ const {src,ly}=makeLayer(d); layers[d.id]={def:d,src,ly}; map.addLayer(ly); });
 
-    // 체크박스 토글
-    document.querySelectorAll('.chk').forEach(chk=>{
-      chk.addEventListener('change', ()=>{
-        const id = chk.dataset.layer;
-        const on = chk.checked;
-        if(L[id]) L[id].layer.setVisible(on);
-      });
-    });
-
-    // 화면 변경 시 새 영역 로드(디바운스)
-    let moveTimer = null;
-    function triggerReload(){
-      if(moveTimer) clearTimeout(moveTimer);
-      moveTimer = setTimeout(()=>{
-        Object.values(L).forEach(({source})=> source.refresh());
-      }, 250);
-    }
-    map.getView().on('change:resolution', triggerReload);
-    map.on('moveend', triggerReload);
-
-    // 전체 보기
-    $('#fitBtn').addEventListener('click', ()=>{
-      const ex=ol.extent.createEmpty();
-      Object.values(L).forEach(({source})=>{
-        source.getFeatures().forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
-      });
-      if(ol.extent.isEmpty(ex)) return;
-      map.getView().fit(ex, {duration:400, padding:[30,360,30,30], maxZoom:14});
+    // 토글
+    document.getElementById('layerToggles').addEventListener('change', (e)=>{
+      const id=e.target?.dataset?.id; if(!id||!layers[id]) return;
+      layers[id].ly.setVisible(e.target.checked);
     });
 
     // 현재 위치
-    function locate(){
-      const isSecure = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-      if(!isSecure || !navigator.geolocation){ warn('위치 권한/환경 문제(https 필요)'); return; }
+    function geolocate(){
+      const isSecure=location.protocol==='https:'||['localhost','127.0.0.1','::1'].includes(location.hostname);
+      if(!isSecure||!navigator.geolocation){ warn('위치 권한/환경 문제(https 필요)'); return; }
       navigator.geolocation.getCurrentPosition(
-        p=>{
-          const c = ol.proj.fromLonLat([p.coords.longitude, p.coords.latitude]);
-          map.getView().animate({center:c, zoom:13, duration:400});
-        },
+        p=>{ const c=ol.proj.fromLonLat([p.coords.longitude,p.coords.latitude]); view.animate({center:c,zoom:13,duration:400}); ok('현재 위치로 이동'); },
         err=> logERR('geolocation 실패', `${err.code} ${err.message}`),
-        { enableHighAccuracy:true, maximumAge:5000, timeout:9000 }
+        {enableHighAccuracy:true, maximumAge:5000, timeout:9000}
       );
     }
-    $('#locBtn').addEventListener('click', locate);
+    document.getElementById('locBtn').onclick=geolocate;
 
-    ok('준비 완료');
-    // 시작하자마자 한 번 로드
-    triggerReload();
+    // 전체 보기
+    function fitAll(){
+      const ex=ol.extent.createEmpty();
+      Object.values(layers).forEach(o=>{ if(!o.ly.getVisible()) return; o.src.getFeatures().forEach(f=>ol.extent.extend(ex,f.getGeometry().getExtent())); });
+      if(!ol.extent.isEmpty(ex)) map.getView().fit(ex,{duration:450,padding:[20,380,20,20],maxZoom:14});
+    }
+    document.getElementById('fitBtn').onclick=fitAll;
+
+    // 첫 화면에서 로더 동작 유도(살짝 팬)
+    setTimeout(()=> view.setCenter( ol.proj.fromLonLat([127.5,36.401]) ), 0);
   }
 
   function domReady(cb){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', cb); else cb(); }
-  window.OL_READY.then(()=> domReady(start)).catch(err=>{
-    logERR('OpenLayers 로딩 실패', (err && (err.stack||err.message)) || String(err));
-  });
+  window.OL_READY.then(()=>domReady(()=>startApp())).catch(err=>{ logERR('OpenLayers 로딩 실패', err?.message||String(err)); });
 })();
 </script>
 </body>
