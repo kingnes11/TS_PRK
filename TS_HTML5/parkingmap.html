@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행) · 에러로그(URL) · RO 경고해결</title>
+<title>행정구역도(WFS JSONP 4종) + WMTS + 반경토글(500m/1km/1.5km) + 더미10 · 하단리스트(2행) · 에러로그(URL)</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
 <script src="https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js"></script>
 
 <style>
-  :root{ --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --border:#20304f; }
+  :root{ --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --border:#20304f; --accent:#2563eb; }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
   #map{position:fixed;inset:0}
 
@@ -25,19 +25,27 @@
   .muted{color:var(--muted)}
   .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
 
+  /* 반경 토글 */
+  .chipbar{display:flex; gap:8px; flex-wrap:wrap}
+  .chip{
+    background:#12203c; border:1px solid var(--border); color:#c7d2fe;
+    padding:8px 12px; border-radius:999px; cursor:pointer; user-select:none; font-weight:700; font-size:.92rem
+  }
+  .chip.active{background:#1e2c54; color:#fff; border-color:transparent}
+
   /* 2열 그리드 카드 + 스크롤(높이는 JS로 ‘2행’만 보이도록 동적 제한) */
   .list{overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0c1530; padding:8px}
   .grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px}
   .card{
     padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#0e1a39; cursor:pointer;
-    display:grid; gap:4px; min-height:66px; /* 대략 높이(실제는 JS로 측정) */
+    display:grid; gap:4px; min-height:66px;
   }
   .card:hover{background:#122147}
   .nm{font-weight:700}
   .sub{color:var(--muted); font-size:.9rem; display:flex; gap:6px; flex-wrap:wrap}
   .badge{display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c}
 
-  /* 에러 로그 (오른쪽, 하단 리스트와 겹치지 않도록 JS로 bottom 보정) */
+  /* 에러 로그 */
   .errdock{
     position:fixed; right:12px; z-index:1000; width:min(560px,calc(100% - 24px));
     background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
@@ -71,8 +79,16 @@
     <button class="btn" id="locBtn">현재 위치</button>
     <button class="btn" id="fitBtn">전체 보기</button>
   </div>
+
+  <!-- 반경 토글 (500m / 1km / 1.5km) -->
+  <div class="chipbar" id="radiusBar" role="group" aria-label="반경 선택">
+    <div class="chip" data-km="0.5">500m</div>
+    <div class="chip active" data-km="1">1km</div>
+    <div class="chip" data-km="1.5">1.5km</div>
+  </div>
+
   <div class="list" id="listWrap">
-    <div id="list" class="grid" role="listbox" aria-label="주차장 목록(더미 10)"></div>
+    <div id="list" class="grid" role="listbox" aria-label="주차장 목록(반경 내)"></div>
   </div>
 </section>
 
@@ -232,16 +248,24 @@
   });
   [lySido,lySigg,lyEmd,lyRi].forEach(refreshAdminLayer);
 
-  /* ===== 더미 주차장 10개 (클릭 팝업 + 리스트 클릭 연동) ===== */
-  const RADIUS_KM=3;
+  /* ===== 더미 주차장 10개 + 반경 필터 ===== */
   const prkSrc=new ol.source.Vector(), prkLy=new ol.layer.Vector({ source:prkSrc, zIndex:120 });
   const P_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
   prkLy.setStyle(new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(P_SVG), anchor:[0.5,0.5], anchorXUnits:'fraction', anchorYUnits:'fraction' }) }));
   map.addLayer(prkLy);
 
+  // 반경 원 레이어
+  const ringSrc = new ol.source.Vector();
+  const ringLy  = new ol.layer.Vector({ source:ringSrc, zIndex:115, style: new ol.style.Style({
+    stroke:new ol.style.Stroke({ color:[37,99,235,0.9], width:2 }),
+    fill:  new ol.style.Fill({ color:[37,99,235,0.08] })
+  })});
+  map.addLayer(ringLy);
+
+  // 거리/난수 유틸
   function haversineKm(a,b){ const R=6371,toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
     const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2); const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2; return 2*R*Math.asin(Math.sqrt(t)); }
-  function genDummy(lng,lat,n=10,rKm=RADIUS_KM){
+  function genDummy(lng,lat,n=10,rKm=3){
     const out=[]; for(let i=0;i<n;i++){
       const ang=Math.random()*Math.PI*2, r=Math.random()*rKm;
       const dy=(r/111)*Math.sin(ang), dx=(r/(111*Math.cos(lat*Math.PI/180)))*Math.cos(ang);
@@ -251,11 +275,21 @@
     return out.sort((a,b)=>a.dist-b.dist);
   }
 
-  const rowsState = { rows:[], byId:new Map() };
+  // 상태
+  const rowsState = { rows:[], byId:new Map() }; // 현재 "표시중" 목록
+  let dummyAllRows = [];                          // 생성된 10개 원본(반경 필터 전)
+  const RADIUS_CHOICES = [ {km:0.5, label:'500m'}, {km:1, label:'1km'}, {km:1.5, label:'1.5km'} ];
+  let currentRadiusKm = 1; // 기본 1km
 
+  // 리스트 UI
   function rebuildListRows(rows){
     rowsState.rows = rows; rowsState.byId.clear(); rows.forEach(r=>rowsState.byId.set(r.id,r));
     const grid=$('#list');
+    if(rows.length===0){
+      grid.innerHTML = `<div class="card" tabindex="-1"><div class="nm">반경 내 결과 없음</div><div class="sub">반경 ${currentRadiusKm}km</div></div>`;
+      scheduleLayout();
+      return;
+    }
     grid.innerHTML = rows.map((r,i)=>`
       <div class="card" data-id="${r.id}">
         <div class="nm">${i+1}. ${r.nm}</div>
@@ -271,8 +305,7 @@
       });
     });
 
-    // ▶ 카드 2행만 보이도록(경고 없는 배치 호출)
-    scheduleLayout();
+    scheduleLayout(); // 2행 제한 재계산
   }
 
   function adjustListHeight(){
@@ -290,18 +323,50 @@
     wrap.style.maxHeight = Math.ceil(maxH) + 'px';
   }
 
-  function setDummyOn(lng,lat){
+  // 지도 마커/리스트 동기
+  function setFeaturesFromRows(rows){
     prkSrc.clear();
-    const rows = genDummy(lng,lat,10,RADIUS_KM);
-    const feats = rows.map(r=>{
-      return new ol.Feature({
-        geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng,r.lat])),
-        pid:r.id, title:r.nm, info:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`
-      });
-    });
+    const feats = rows.map(r=> new ol.Feature({
+      geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng,r.lat])),
+      pid:r.id, title:r.nm, info:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`
+    }));
     prkSrc.addFeatures(feats);
-    rebuildListRows(rows);
   }
+
+  // 반경 원 갱신
+  function updateRing(lng, lat){
+    ringSrc.clear();
+    const center = ol.proj.fromLonLat([lng,lat]);
+    const f = new ol.Feature(new ol.geom.Circle(center, currentRadiusKm*1000));
+    ringSrc.addFeature(f);
+  }
+
+  // 반경 필터 적용
+  function applyRadiusFilter(){
+    if(!lastMeLL || dummyAllRows.length===0){
+      rebuildListRows([]);
+      setFeaturesFromRows([]);
+      return;
+    }
+    const filtered = dummyAllRows.filter(r => r.dist <= currentRadiusKm + 1e-6);
+    rebuildListRows(filtered);
+    setFeaturesFromRows(filtered);
+    updateRing(lastMeLL.lng, lastMeLL.lat);
+  }
+
+  // 반경 토글 UI
+  function initRadiusUI(){
+    const bar = $('#radiusBar');
+    bar.addEventListener('click', (e)=>{
+      const chip = e.target.closest('.chip'); if(!chip) return;
+      bar.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      currentRadiusKm = parseFloat(chip.dataset.km) || 1;
+      applyRadiusFilter();
+      ok(`반경 ${currentRadiusKm}km 적용`);
+    });
+  }
+  initRadiusUI();
 
   // 팝업
   const popupEl=document.createElement('div');
@@ -362,9 +427,14 @@
         const fixed = coerceLngLat(p.coords.longitude, p.coords.latitude);
         lastMeLL = fixed;
         drawMe(fixed.lng, fixed.lat);
-        if(!dummySeeded){ setDummyOn(fixed.lng, fixed.lat); dummySeeded=true; }
+
+        if(!dummySeeded){
+          dummyAllRows = genDummy(fixed.lng, fixed.lat, 10, 3); // 생성은 3km 안에서
+          dummySeeded=true;
+        }
+        applyRadiusFilter(); // 선택 반경 내만 노출
         view.animate({center:ol.proj.fromLonLat([fixed.lng,fixed.lat]), zoom:15, duration:400});
-        ok(`현재 위치 반영됨 · ${fixed.lat.toFixed(5)}, ${fixed.lng.toFixed(5)}`);
+        ok(`현재 위치 반영됨 · 반경 ${currentRadiusKm}km`);
       },
       e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
@@ -380,11 +450,12 @@
     }
   };
 
-  // “전체 보기”
+  // “전체 보기” : 반경원 + 마커 + 현재위치 포함
   $('#fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     prkSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
+    ringSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,calcBottomPad(),20], maxZoom:17});
   };
 
@@ -419,7 +490,6 @@
   // 부팅
   acquireAndCenterOnce();
   scheduleLayout(); // 초기 1회
-
 })();
 </script>
 </body>
