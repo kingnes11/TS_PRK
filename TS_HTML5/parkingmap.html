@@ -383,7 +383,7 @@
               if(feats && feats.length) src.addFeatures(feats);
               return;
             }catch(e){
-              logERR(`WFS 로드 실패(${def.typename})`, urlJSON + '\n' + (e?.stack || e?.message || String(e)));
+              //logERR(`WFS 로드 실패(${def.typename})`, urlJSON + '\n' + (e?.stack || e?.message || String(e)));
             }
 
             // 2) JSONP(GeoJSON)
