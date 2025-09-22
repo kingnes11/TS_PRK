@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 반경토글 · 하단리스트(2행) · 에러로그(URL) · 팝업</title>
+<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10(초기 1회만) · 반경토글 · 하단리스트(2행) · 에러로그(URL) · 팝업</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
@@ -165,7 +165,7 @@
   const base = new ol.layer.Tile({ source:new ol.source.XYZ({ url:WMTS, crossOrigin:'anonymous' }), zIndex:0 });
   const map  = new ol.Map({ target:'map', layers:[base], view });
 
-  /* ===== JSONP 유틸 ===== */
+  /* ===== JSONP 유틸 (행정구역) ===== */
   function buildWFSUrlJSONP(typename, bbox, cbName){
     const p = new URLSearchParams({
       SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
@@ -271,6 +271,7 @@
   const RAD_CHOICES = [500, 1000, 1500]; // m
   let radiusM = 1000;
   let centerRef = null; // {lng,lat}
+  let dummyInited = false; // ✅ 더미는 최초 1회만 생성
 
   // 반경 원(지도 표시)
   const ringSrc = new ol.source.Vector();
@@ -305,16 +306,13 @@
       const cap = { total:rnd(20,200) }; cap.disabled=rnd(0,Math.min(10,cap.total)); cap.compact=rnd(0,Math.min(15,cap.total-cap.disabled)); cap.eco=rnd(0,Math.min(10,cap.total-cap.disabled-cap.compact)); cap.pregnant=rnd(0,Math.min(6,cap.total-cap.disabled-cap.compact-cap.eco));
       const hours = (i%3===0)?'24시간':'평일 09:00~19:00';
       const fee   = (i%4===0)?'무료':'기본 1,000원/10분';
-      out.push({
-        id:`DM-${i+1}`, nm:`더미 주차장 ${i+1}`, lng:x, lat:y, type, div, cap, hours, fee
-      });
+      out.push({ id:`DM-${i+1}`, nm:`더미 주차장 ${i+1}`, lng:x, lat:y, type, div, cap, hours, fee });
     }
     return out;
   }
 
   const rowsState = { allRows:[], rows:[], byId:new Map() };
 
-  // 반경 필터 적용: 지도/리스트 동시 갱신
   function applyRadiusFilter(){
     if(!centerRef){ rebuildListRows([]); prkSrc.clear(); updateRing(); return; }
     const rows = rowsState.allRows
@@ -322,19 +320,14 @@
       .filter(r => (r.dist*1000) <= radiusM)
       .sort((a,b)=>a.dist-b.dist);
 
-    // 레이어 재구성(반경 내만 표시)
     prkSrc.clear();
-    const feats = rows.map(r=> new ol.Feature({
-      geometry: new ol.geom.Point(ol.proj.fromLonLat([r.lng, r.lat])),
-      p: r
-    }));
+    const feats = rows.map(r=> new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng, r.lat])), p:r }));
     prkSrc.addFeatures(feats);
 
     rebuildListRows(rows);
     updateRing();
   }
 
-  // 리스트 UI
   function rebuildListRows(rows){
     rowsState.rows = rows; rowsState.byId.clear(); rows.forEach(r=>rowsState.byId.set(r.id,r));
     const grid=$('#list');
@@ -373,12 +366,6 @@
     const maxH = cardH * visibleRows + gap * (visibleRows - 1) + padding;
     wrap.style.maxHeight = Math.ceil(maxH) + 'px';
     placeErrdock();
-  }
-
-  // 더미 생성(전체 집합만 갱신)
-  function setDummyAll(lng,lat){
-    rowsState.allRows = genDummy(lng,lat,10,3);
-    applyRadiusFilter(); // 반경 필터 후 표시
   }
 
   // 팝업
@@ -443,29 +430,46 @@
     return { lng, lat };
   }
 
-  function setMe(lng,lat,fly=true){
+  // ✅ setMe: 중심 이동/표시 + (옵션)더미 최초 1회 생성
+  function setMe(lng,lat,{fly=true, gen=false}={}){
     const fixed = coerceLngLat(lng,lat);
-    centerRef = { lng: fixed.lng, lat: fixed.lat }; // 반경 기준 중심 갱신
+    centerRef = { lng: fixed.lng, lat: fixed.lat };
+
+    // 현재위치 마커 이동
     meSrc.clear();
     const coord=ol.proj.fromLonLat([centerRef.lng,centerRef.lat]);
     const f=new ol.Feature({ geometry:new ol.geom.Point(coord) }); f.setStyle(stME); meSrc.addFeature(f);
+
+    // 지도 이동
     if(fly){ view.animate({center:coord, zoom:15, duration:400}); }
-    setDummyAll(centerRef.lng, centerRef.lat); // 전체 더미 생성 후
-    ok(`현재 위치 반영됨 · ${centerRef.lat.toFixed(5)}, ${centerRef.lng.toFixed(5)}`);
+
+    // 더미 생성은 gen===true일 때만 (최초 1회)
+    if(gen && !dummyInited){
+      rowsState.allRows = genDummy(centerRef.lng, centerRef.lat, 10, 3);
+      dummyInited = true;
+    }
+
+    // 반경/리스트 재적용(재생성 없이 필터만 업데이트)
+    applyRadiusFilter();
+
+    ok(`현재 위치 반영됨 · ${centerRef.lat.toFixed(5)}, ${centerRef.lng.toFixed(5)} · 더미생성:${gen && dummyInited ? '1회' : '없음'}`);
   }
 
-  function locate(auto=true){
+  function locate({auto=true, generate=false}={}){
     const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
     if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
     const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
     navigator.geolocation.getCurrentPosition(
-      p=> setMe(p.coords.longitude, p.coords.latitude, auto), // [lng,lat]
+      p=> setMe(p.coords.longitude, p.coords.latitude, { fly:auto, gen:generate }),
       e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
     );
   }
 
-  $('#locBtn').onclick=()=> locate(false);
+  // 버튼: 현재 위치 ⇒ 지도 이동만 (더미 재생성 금지)
+  $('#locBtn').onclick=()=> locate({auto:false, generate:false});
+
+  // 버튼: 전체 보기
   $('#fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
@@ -475,13 +479,13 @@
     if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,bottomPad,20], maxZoom:17});
   };
 
-  // 반경 토글 클릭
+  // 반경 토글
   $('#radBar').addEventListener('click', (e)=>{
     const chip = e.target.closest('.chip'); if(!chip) return;
     $('#radBar').querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
     chip.classList.add('active');
     radiusM = Number(chip.dataset.m)||1000;
-    applyRadiusFilter(); // 반경 재적용
+    applyRadiusFilter();
   });
 
   /* ===== 오류창 위치를 하단 리스트 위로 올리기 ===== */
@@ -499,9 +503,9 @@
   window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
   window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
-  // 부팅
+  // 부팅 시: 자동 위치 시도 + ✅ 이때만 더미 1회 생성
   placeErrdock();
-  locate(true); // 현재 위치 시도 (setMe → 더미 생성 → 반경 필터 적용)
+  locate({auto:true, generate:true});
 })();
 </script>
 </body>
