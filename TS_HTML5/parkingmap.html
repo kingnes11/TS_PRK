@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 에러로그(URL)</title>
+<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2열) · 에러로그(URL)</title>
 
-<!-- OpenLayers 10.6.1 -->
+<!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
 <script src="https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js"></script>
 
@@ -14,26 +14,35 @@
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
   #map{position:fixed;inset:0}
 
-  .side{
-    position:fixed; left:12px; top:12px; bottom:12px; width:360px; z-index:30;
-    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px;
-    display:flex; flex-direction:column; gap:10px;
+  /* 하단 리스트(bottom sheet) */
+  .bottom{
+    position:fixed; left:12px; right:12px; bottom:12px; z-index:30;
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px 10px 12px;
+    box-shadow:0 10px 30px rgba(0,0,0,.35); display:flex; flex-direction:column; gap:8px;
+    max-height:40vh;  /* 스크롤 영역 확보 */
   }
   .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
   .title{font-weight:800}
-  .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
   .muted{color:var(--muted)}
-  .list{overflow:auto; border:1px solid var(--border); border-radius:12px; flex:1; min-height:120px; background:#0c1530}
-  .item{padding:10px 12px; border-bottom:1px solid var(--border); cursor:pointer}
-  .item:last-child{border-bottom:0}
-  .item:hover{background:rgba(37,99,235,.08)}
+  .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
+
+  /* 2열 그리드 카드 + 스크롤 */
+  .list{overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0c1530; padding:8px}
+  .grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px}
+  .card{
+    padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#0e1a39; cursor:pointer;
+    display:grid; gap:4px;
+  }
+  .card:hover{background:#122147}
   .nm{font-weight:700}
-  .sub{color:var(--muted); font-size:.92rem; display:flex; gap:6px; flex-wrap:wrap}
+  .sub{color:var(--muted); font-size:.9rem; display:flex; gap:6px; flex-wrap:wrap}
   .badge{display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c}
 
-  /* 에러 로그 (에러만) */
-  .errdock{ position:fixed; right:12px; bottom:12px; z-index:1000; width:min(560px,calc(100% - 24px));
-    background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  /* 에러 로그 (오른쪽, 하단 리스트와 겹치지 않도록 JS로 bottom 보정) */
+  .errdock{
+    position:fixed; right:12px; z-index:1000; width:min(560px,calc(100% - 24px));
+    background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
   .errdock .hdr{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border) }
   .errdock .title{ font-weight:800 }
   .errdock .body{ max-height:38vh; overflow:auto; padding:8px 10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.86rem; background:#0b1220 }
@@ -43,9 +52,9 @@
   .url{ color:#60a5fa; word-break:break-all }
   .btnsm{ border:1px solid var(--border); background:#0b1530; color:#c7d2fe; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700 }
 
-  /* 반응형: 아이폰/갤럭시/웹 */
+  /* 반응형 */
   @media (max-width:480px){
-    .side{ left:8px; right:8px; width:auto; top:8px; bottom:auto; max-height:66vh; overflow:auto }
+    .bottom{ left:8px; right:8px; bottom:8px; max-height:45vh }
     .errdock{ left:8px; right:8px; width:auto }
   }
 </style>
@@ -53,18 +62,22 @@
 <body>
 <div id="map" aria-label="지도"></div>
 
-<aside class="side">
+<!-- 하단 리스트 패널 -->
+<section class="bottom" id="bottom">
   <div class="row">
-    <div class="title">행정구역 + 더미 주차장 10</div>
-    <div class="muted" style="margin-left:auto" id="stat">초기화 중…</div>
+    <div class="title">더미 주차장 10</div>
+    <div class="muted" id="stat" style="margin-left:auto">초기화 중…</div>
   </div>
   <div class="row">
     <button class="btn" id="locBtn">현재 위치</button>
     <button class="btn" id="fitBtn">전체 보기</button>
   </div>
-  <div id="list" class="list" role="listbox" aria-label="주차장 목록(더미 10)"></div>
-</aside>
+  <div class="list">
+    <div id="list" class="grid" role="listbox" aria-label="주차장 목록(더미 10)"></div>
+  </div>
+</section>
 
+<!-- 오류 로그(에러만, URL 표시) : JS가 bottom 높이에 맞춰 자동 위로 띄움 -->
 <section class="errdock" id="errdock" aria-label="오류 로그">
   <div class="hdr">
     <div class="title">오류 로그(에러만)</div>
@@ -130,17 +143,14 @@
     return `${WFS_API}?${p.toString()}`;
   }
 
-  // VWorld JSONP 응답 → GeoJSON FeatureCollection 추출
   function extractGeoJSON(payload){
     if(!payload) return null;
-    if(payload.type==='FeatureCollection' && Array.isArray(payload.features)) return payload; // 순수 GeoJSON
+    if(payload.type==='FeatureCollection' && Array.isArray(payload.features)) return payload;
     if(payload.response?.result?.featureCollection){
       const fc = payload.response.result.featureCollection;
       if(fc.type==='FeatureCollection' && Array.isArray(fc.features)) return fc;
     }
-    if(typeof payload==='string'){
-      try{ return extractGeoJSON(JSON.parse(payload)); }catch(e){}
-    }
+    if(typeof payload==='string'){ try{ return extractGeoJSON(JSON.parse(payload)); }catch(e){} }
     return null;
   }
 
@@ -196,25 +206,20 @@
     ly._meta={ typename, minZ, maxZ, src };
     return ly;
   }
+  const lySido = makeAdminLayer('lt_c_adsido_info', 4, 20, stSido);
+  const lySigg = makeAdminLayer('lt_c_adsigg_info', 8, 20, stSigg);
+  const lyEmd  = makeAdminLayer('lt_c_ademd_info', 12, 22, stEmd);
+  const lyRi   = makeAdminLayer('lt_c_adri_info', 14, 24, stRi);
 
-  const lySido = makeAdminLayer('lt_c_adsido_info', 4, 20, stSido); // 시도
-  const lySigg = makeAdminLayer('lt_c_adsigg_info', 8, 20, stSigg); // 시군구
-  const lyEmd  = makeAdminLayer('lt_c_ademd_info', 12, 22, stEmd);  // 읍면동
-  const lyRi   = makeAdminLayer('lt_c_adri_info', 14, 24, stRi);    // 리
-
-  map.addLayer(lySido);
-  map.addLayer(lySigg);
-  map.addLayer(lyEmd);
-  map.addLayer(lyRi);
+  map.addLayer(lySido); map.addLayer(lySigg); map.addLayer(lyEmd); map.addLayer(lyRi);
 
   function refreshAdminLayer(ly){
     const z=view.getZoom();
     if(z<ly._meta.minZ || z>ly._meta.maxZ){ ly._meta.src.clear(); return; }
     const ex=view.calculateExtent(map.getSize());
-    const bbox=[ex[0],ex[1],ex[2],ex[3]]; // EPSG:3857 == 900913
+    const bbox=[ex[0],ex[1],ex[2],ex[3]];
     loadWFS_JSONP(ly._meta.typename, bbox, ly._meta.src).catch(()=>{});
   }
-
   let mvTimer=null;
   map.on('moveend', ()=>{
     clearTimeout(mvTimer);
@@ -246,11 +251,11 @@
     rowsState.rows = rows; rowsState.byId.clear(); rows.forEach(r=>rowsState.byId.set(r.id,r));
     const wrap=$('#list');
     wrap.innerHTML = rows.map((r,i)=>`
-      <div class="item" data-id="${r.id}">
+      <div class="card" data-id="${r.id}">
         <div class="nm">${i+1}. ${r.nm}</div>
-        <div class="sub"><span class="badge">${r.dist.toFixed(2)} km</span> <span>위치: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</span></div>
+        <div class="sub"><span class="badge">${r.dist.toFixed(2)} km</span> <span>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</span></div>
       </div>`).join('');
-    wrap.querySelectorAll('.item').forEach(el=>{
+    wrap.querySelectorAll('.card').forEach(el=>{
       el.addEventListener('click', ()=>{
         const r = rowsState.byId.get(el.dataset.id); if(!r) return;
         const c = ol.proj.fromLonLat([r.lng,r.lat]);
@@ -264,8 +269,10 @@
     prkSrc.clear();
     const rows = genDummy(lng,lat,10,RADIUS_KM);
     const feats = rows.map(r=>{
-      const f = new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng,r.lat])), pid:r.id, title:r.nm, info:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km` });
-      return f;
+      return new ol.Feature({
+        geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng,r.lat])),
+        pid:r.id, title:r.nm, info:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`
+      });
     });
     prkSrc.addFeatures(feats);
     rebuildListRows(rows);
@@ -329,7 +336,7 @@
     if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
     const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
     navigator.geolocation.getCurrentPosition(
-      p=> setMe(p.coords.longitude, p.coords.latitude, auto), // [lng,lat] 순서 유지
+      p=> setMe(p.coords.longitude, p.coords.latitude, auto), // [lng,lat]
       e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
     );
@@ -340,10 +347,21 @@
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     prkSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
-    if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[30,380,30,30], maxZoom:17});
+    if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,180,20], maxZoom:17}); // 하단패널 높이 고려하여 padding bottom
   };
 
-  // 부팅: 현재 위치 시도 + 행정경계 로딩
+  // 오류창이 하단 리스트와 겹치지 않도록 자동 보정
+  const errdock = $('#errdock');
+  function placeErrdock(){
+    const b = $('#bottom');
+    const h = b.getBoundingClientRect().height; // 현재 하단 패널 높이
+    errdock.style.bottom = (h + 12) + 'px';
+  }
+  new ResizeObserver(placeErrdock).observe($('#bottom'));
+  window.addEventListener('resize', placeErrdock);
+  placeErrdock();
+
+  // 부팅
   locate(true);
 })();
 </script>
