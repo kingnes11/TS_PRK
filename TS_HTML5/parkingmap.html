@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행만 보이기) · 에러로그(URL)</title>
+<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행) · 에러로그(URL)</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
@@ -68,7 +68,8 @@
     <div class="muted" id="stat" style="margin-left:auto">초기화 중…</div>
   </div>
   <div class="row">
-    <button class="btn" id="locBtn">현재 위치</button>
+    <button class="btn" id="gotoBtn">현재 위치로 이동</button>
+    <button class="btn" id="reLocBtn">위치 재측정</button>
     <button class="btn" id="fitBtn">전체 보기</button>
   </div>
   <div class="list" id="listWrap">
@@ -96,6 +97,9 @@
   const SRS    = 'EPSG:900913';                 // == EPSG:3857
   const WFS_API= 'https://api.vworld.kr/req/wfs';
   const WMTS   = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
+
+  // ★ 동일 위치로 간주할 임계치(m) — 필요 시 변경
+  const SAME_POS_M = 20;
 
   const $ = (s)=>document.querySelector(s);
   const stat = $('#stat');
@@ -322,7 +326,7 @@
     if(!hit) closePopup();
   });
 
-  /* ===== 현재 위치 (스왑가드 + 캐시 + 이동 전용 버튼) ===== */
+  /* ===== 현재 위치 (스왑가드 + 캐시 + 이동/재측정 분리) ===== */
   const meSrc=new ol.source.Vector(), meLy=new ol.layer.Vector({ source:meSrc, zIndex:130 }); map.addLayer(meLy);
   const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const stME=new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(ME_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' }) });
@@ -340,15 +344,13 @@
     return { lng, lat };
   }
 
-  // ★ 추가: 현재 위치 캐시
   let lastMe = null; // {lng, lat}
 
-  // ★ 변경: setMe → 이동 + (의미 있게 바뀐 경우에만) 더미 재생성
   function setMe(lng,lat,fly=true){
     const fixed = coerceLngLat(lng,lat);
     lng = fixed.lng; lat = fixed.lat;
 
-    const same = lastMe ? (haversineKm(lastMe, {lng,lat}) < 0.02) : false; // 20m 미만이면 동일 취급
+    const same = lastMe ? (haversineKm(lastMe, {lng,lat})*1000 < SAME_POS_M) : false;
 
     meSrc.clear();
     const f=new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat])) }); f.setStyle(stME); meSrc.addFeature(f);
@@ -356,10 +358,9 @@
 
     if(!same){ setDummyOn(lng,lat); }
     lastMe = { lng, lat };
-    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}${same ? ' (중복생성 방지)' : ''}`);
+    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}${same ? ' (재생성 생략)' : ''}`);
   }
 
-  // 지오로케이션
   function locate(fly=true){
     const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
     if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
@@ -371,7 +372,6 @@
     );
   }
 
-  // ★ 추가: 현재 위치로 이동(캐시 우선, 없으면 측위)
   function gotoCurrent(){
     if(lastMe){
       view.animate({ center: ol.proj.fromLonLat([lastMe.lng, lastMe.lat]), zoom: 15, duration: 350 });
@@ -381,8 +381,8 @@
     }
   }
 
-  // 버튼 바인딩: locate(false) → gotoCurrent()
-  document.getElementById('locBtn').onclick = gotoCurrent;
+  document.getElementById('gotoBtn').onclick = gotoCurrent; // 이동 전용
+  document.getElementById('reLocBtn').onclick = ()=> locate(true); // 재측정
 
   document.getElementById('fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
@@ -391,7 +391,7 @@
     if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,calcBottomPad(),20], maxZoom:17});
   };
 
-  // === 하단 리스트 높이와 오류창이 겹치지 않도록 자동 보정 ===
+  /* === 오류창 위치 보정 === */
   const errdock = $('#errdock');
   function calcBottomPad(){
     const b = $('#bottom');
