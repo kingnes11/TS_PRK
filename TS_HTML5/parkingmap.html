@@ -3,18 +3,17 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행) · 에러로그(URL, 최소화)</title>
+<title>경계(WFS JSONP 타일+캐시) · VWorld WMTS/백지도 토글 · 더미10(2행 리스트) · 최소화버튼 · 에러로그(URL) · 트래픽 절감</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
 <script src="https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js"></script>
 
 <style>
-  :root{ --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --border:#20304f; }
+  :root{ --bg:#0b1220; --panel:#0f172a; --text:#e5e7eb; --muted:#94a3b8; --border:#20304f; --accent:#2563eb; }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
-  #map{position:fixed;inset:0}
+  #map{position:fixed;inset:0; background:#fff;}
 
-  /* 하단 리스트(bottom sheet) */
   .bottom{
     position:fixed; left:12px; right:12px; bottom:12px; z-index:30;
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px 10px 12px;
@@ -24,10 +23,11 @@
   .title{font-weight:800}
   .muted{color:var(--muted)}
   .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
-  .btnsm{ border:1px solid var(--border); background:#0b1530; color:#c7d2fe; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700 }
+  .btn.toggle{color:#93c5fd}
+  .btn.min{ padding:4px 10px; font-weight:900; line-height:1 }
+  .sep{flex:1}
 
-  /* 2열 그리드 카드 + 스크롤(높이는 JS로 ‘2행’만 보이도록 동적 제한) */
-  .list{overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0c1530; padding:8px}
+  .list{overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0c1530; padding:8px; transition:max-height .2s ease}
   .grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px}
   .card{
     padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#0e1a39; cursor:pointer;
@@ -38,7 +38,6 @@
   .sub{color:var(--muted); font-size:.9rem; display:flex; gap:6px; flex-wrap:wrap}
   .badge{display:inline-block; font-size:.78rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#12203c}
 
-  /* 에러 로그 (오른쪽, 하단 리스트와 겹치지 않도록 JS로 bottom 보정) */
   .errdock{
     position:fixed; right:12px; z-index:1000; width:min(560px,calc(100% - 24px));
     background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35);
@@ -50,13 +49,9 @@
   .time{ color:#9ca3af; margin-right:6px }
   .lvl{ color:#fca5a5; font-weight:800; margin-right:6px }
   .url{ color:#60a5fa; word-break:break-all }
+  .btnsm{ border:1px solid var(--border); background:#0b1530; color:#c7d2fe; border-radius:8px; padding:6px 10px; cursor:pointer; font-weight:700 }
+  .btnsm.min{ padding:4px 10px; font-weight:900; line-height:1 }
 
-  /* 최소화 상태 */
-  .bottom.collapsed .row.tools,
-  .bottom.collapsed .list { display:none }
-  .errdock.collapsed .body { display:none }
-
-  /* 반응형 */
   @media (max-width:480px){
     .bottom{ left:8px; right:8px; bottom:8px; }
     .errdock{ left:8px; right:8px; width:auto }
@@ -66,16 +61,16 @@
 <body>
 <div id="map" aria-label="지도"></div>
 
-<!-- 하단 리스트 패널 -->
 <section class="bottom" id="bottom">
-  <div class="row head">
+  <div class="row">
     <div class="title">더미 주차장 10</div>
-    <div class="muted" id="stat" style="margin-left:auto">초기화 중…</div>
-    <button class="btnsm" id="minBottom" aria-expanded="true" title="리스트 최소화">▽</button>
+    <div class="muted" id="stat">초기화 중…</div>
+    <div class="sep"></div>
+    <button class="btn toggle" id="baseToggle">배경: 백지도</button>
+    <button class="btn min" id="minList" title="리스트 최소화">—</button>
   </div>
-  <div class="row tools">
-    <button class="btn" id="gotoBtn">현재 위치로 이동</button>
-    <button class="btn" id="reLocBtn">위치 재측정</button>
+  <div class="row">
+    <button class="btn" id="locBtn">현재 위치</button>
     <button class="btn" id="fitBtn">전체 보기</button>
   </div>
   <div class="list" id="listWrap">
@@ -83,36 +78,39 @@
   </div>
 </section>
 
-<!-- 오류 로그(에러만, URL 표시) : JS가 bottom 높이에 맞춰 자동 위로 띄움 -->
 <section class="errdock" id="errdock" aria-label="오류 로그">
   <div class="hdr">
     <div class="title">오류 로그(에러만)</div>
     <div class="muted" id="errcount">0건</div>
     <div style="flex:1"></div>
-    <button class="btnsm" id="minErr" aria-expanded="true" title="오류창 최소화">▽</button>
     <button class="btnsm" id="copyErr">복사</button>
     <button class="btnsm" id="clearErr">지우기</button>
+    <button class="btnsm min" id="minErr" title="오류창 최소화">—</button>
   </div>
   <div class="body" id="errbody"></div>
 </section>
 
 <script>
 (function(){
-  /* ===== 기본 설정 ===== */
+  /* ===== 상수/설정 ===== */
   const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82';
   const DOMAIN = 'kingnes11.github.io';
-  const SRS    = 'EPSG:900913';                 // == EPSG:3857
+  const SRS    = 'EPSG:900913';
   const WFS_API= 'https://api.vworld.kr/req/wfs';
-  const WMTS   = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
+  const WMTS_URL = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
 
-  const SAME_POS_M = 20; // 동일 위치 판정 임계치
+  // ↓ 트래픽 절감 파라미터
+  const WFS_TILE_SIZE = 512;            // WFS 타일 BBOX 크기(크게 → 요청 수↓)
+  const WFS_DEBOUNCE  = 500;            // moveend 이후 디바운스
+  const MAX_TILE_CACHE= 150;            // 타일 캐시 LRU 상한
+  const WFS_PROPERTIES= 'ag_geom';      // 속성 최소화 → 지오메트리만 요청
 
   const $ = (s)=>document.querySelector(s);
   const stat = $('#stat');
   const ok = (m)=> stat.innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
   const warn = (m)=> stat.innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
 
-  /* ===== 에러로그(에러만 + URL) ===== */
+  /* ===== 에러로그 ===== */
   const errBody=$('#errbody'), errCnt=$('#errcount');
   const tstr=()=>new Date().toLocaleTimeString();
   function logERR(msg, url, detail){
@@ -128,13 +126,45 @@
     try{ await navigator.clipboard.writeText(txt||'(로그 없음)'); }catch(e){}
   };
   $('#clearErr').onclick=()=>{ errBody.innerHTML=''; errCnt.textContent='0건'; };
+  let errMin=false; $('#minErr').onclick=()=>{ errMin=!errMin; $('#errbody').style.display=errMin?'none':'block'; };
   window.addEventListener('error', e=> logERR('window.onerror: '+e.message,'', e.error?.stack||''));
   window.addEventListener('unhandledrejection', e=> logERR('unhandledrejection','', e.reason?.stack||String(e.reason)));
 
-  /* ===== 지도/뷰/배경(WMTS만) ===== */
+  /* ===== 지도/배경 ===== */
   const view = new ol.View({ center: ol.proj.fromLonLat([127.5,36.4]), zoom: 7, maxZoom: 18, minZoom: 4 });
-  const base = new ol.layer.Tile({ source:new ol.source.XYZ({ url:WMTS, crossOrigin:'anonymous' }), zIndex:0 });
+
+  const WHITE_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=';
+
+  function makeWmtsBase(){
+    return new ol.layer.Tile({
+      source:new ol.source.XYZ({
+        url:WMTS_URL,
+        crossOrigin:'anonymous',
+        tilePixelRatio: 1,          // ✅ 레티나에서도 1배 타일만 요청
+        transition: 0
+      }),
+      zIndex:0
+    });
+  }
+  function makeBlankBase(){
+    return new ol.layer.Tile({
+      source:new ol.source.XYZ({ url:WHITE_TILE, crossOrigin:'anonymous', tilePixelRatio:1, transition:0 }),
+      zIndex:0
+    });
+  }
+  let blankMode = true;
+  let base = blankMode ? makeBlankBase() : makeWmtsBase();
   const map  = new ol.Map({ target:'map', layers:[base], view });
+
+  function updateBaseButton(){ $('#baseToggle').textContent = '배경: ' + (blankMode ? '백지도' : '일반지도'); }
+  $('#baseToggle').onclick = ()=>{
+    blankMode = !blankMode;
+    map.removeLayer(base);
+    base = blankMode ? makeBlankBase() : makeWmtsBase();
+    map.getLayers().insertAt(0, base);
+    updateBaseButton();
+  };
+  updateBaseButton();
 
   /* ===== JSONP 유틸 ===== */
   function buildWFSUrlJSONP(typename, bbox, cbName){
@@ -147,11 +177,11 @@
       OUTPUT:'text/javascript',          // JSONP
       EXCEPTIONS:'text/xml',
       KEY: VW_KEY, DOMAIN: DOMAIN,
-      FORMAT_OPTIONS: `callback:${cbName}`
+      FORMAT_OPTIONS: `callback:${cbName}`,
+      PROPERTYNAME: WFS_PROPERTIES      // ✅ 최소 속성만
     });
     return `${WFS_API}?${p.toString()}`;
   }
-
   function extractGeoJSON(payload){
     if(!payload) return null;
     if(payload.type==='FeatureCollection' && Array.isArray(payload.features)) return payload;
@@ -162,11 +192,11 @@
     if(typeof payload==='string'){ try{ return extractGeoJSON(JSON.parse(payload)); }catch(e){} }
     return null;
   }
-
-  function loadWFS_JSONP(typename, extent3857, targetSource){
+  function loadWFS_JSONP(typename, bbox, targetSource, onUrl){
     return new Promise((resolve,reject)=>{
-      const cb = `vw_cb_${typename.replace(/[^a-z0-9]/gi,'_')}_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-      const url = buildWFSUrlJSONP(typename, extent3857, cb);
+      const cb = `vw_cb_${typename.replace(/[^a-z0-9]/gi,'_')}_${Math.random().toString(36).slice(2)}`;
+      const url = buildWFSUrlJSONP(typename, bbox, cb);
+      if(onUrl) onUrl(url);
       const s = document.createElement('script');
       let done=false, timer=setTimeout(()=>{
         if(done) return; done=true; s.remove(); delete window[cb];
@@ -180,7 +210,6 @@
           if(!fc){ logERR(`WFS(JSONP) 파싱 실패 (${typename})`, url); reject(new Error('parse_error')); return; }
           const fmt = new ol.format.GeoJSON();
           const feats = fmt.readFeatures(fc, { dataProjection:SRS, featureProjection:'EPSG:3857' });
-          targetSource.clear(true);
           if(feats?.length) targetSource.addFeatures(feats);
           resolve(feats?.length||0);
         }catch(e){
@@ -197,7 +226,7 @@
     });
   }
 
-  /* ===== 행정구역 4종 레이어 (WFS JSONP) ===== */
+  /* ===== 행정구역 4종 (타일 기반 WFS + LRU 캐시) ===== */
   function style(color,width,fillA){
     return new ol.style.Style({
       stroke:new ol.style.Stroke({ color, width }),
@@ -212,31 +241,82 @@
   function makeAdminLayer(typename, minZ, maxZ, st){
     const src=new ol.source.Vector({ wrapX:true });
     const ly = new ol.layer.Vector({ source:src, style:st, zIndex: 40+minZ, visible:true });
-    ly._meta={ typename, minZ, maxZ, src };
+    const grid = ol.tilegrid.createXYZ({ maxZoom: 20, tileSize: WFS_TILE_SIZE });
+    ly._meta={
+      typename, minZ, maxZ, src,
+      grid,
+      cache:new Map(),   // key -> {feats, added}
+      lru:[],            // keys
+      inflight:new Set() // keys
+    };
     return ly;
   }
-  const lySido = makeAdminLayer('lt_c_adsido_info', 4, 20, stSido);
-  const lySigg = makeAdminLayer('lt_c_adsigg_info', 8, 20, stSigg);
-  const lyEmd  = makeAdminLayer('lt_c_ademd_info', 12, 22, stEmd);
-  const lyRi   = makeAdminLayer('lt_c_adri_info', 14, 24, stRi);
+  const lySido = makeAdminLayer('lt_c_adsido_info', 6, 20, stSido); // ▶ 더 늦게 로드되도록 상향
+  const lySigg = makeAdminLayer('lt_c_adsigg_info', 10, 20, stSigg);
+  const lyEmd  = makeAdminLayer('lt_c_ademd_info', 13, 22, stEmd);
+  const lyRi   = makeAdminLayer('lt_c_adri_info', 15, 24, stRi);
 
   map.addLayer(lySido); map.addLayer(lySigg); map.addLayer(lyEmd); map.addLayer(lyRi);
 
-  function refreshAdminLayer(ly){
-    const z=view.getZoom();
-    if(z<ly._meta.minZ || z>ly._meta.maxZ){ ly._meta.src.clear(); return; }
-    const ex=view.calculateExtent(map.getSize());
-    const bbox=[ex[0],ex[1],ex[2],ex[3]];
-    loadWFS_JSONP(ly._meta.typename, bbox, ly._meta.src).catch(()=>{});
+  function lruTouch(meta, key){
+    const i = meta.lru.indexOf(key);
+    if(i>=0) meta.lru.splice(i,1);
+    meta.lru.push(key);
+    while(meta.lru.length > MAX_TILE_CACHE){
+      const evict = meta.lru.shift();
+      const ent = meta.cache.get(evict);
+      if(ent && ent.added){ meta.src.removeFeatures(ent.feats); ent.added=false; }
+      meta.cache.delete(evict);
+      meta.inflight.delete(evict);
+    }
   }
+  function clearView(meta){
+    meta.src.clear();
+    for(const [k,ent] of meta.cache){ ent.added=false; }
+  }
+
+  function refreshAdminLayerTiled(ly){
+    const z = Math.round(view.getZoom());
+    const m = ly._meta;
+    if(z < m.minZ || z > m.maxZ){ clearView(m); return; }
+
+    const extent = view.calculateExtent(map.getSize());
+    const zForTiles = Math.max(0, Math.min(20, z)); // 안전 클램프
+
+    // 보이는 타일만 순회
+    const keysNeeded = [];
+    m.grid.forEachTileCoord(extent, zForTiles, tc=>{
+      const key = `${zForTiles}/${tc[1]}/${tc[2]}`;
+      keysNeeded.push(key);
+      const has = m.cache.get(key);
+      if(has && has.added){ lruTouch(m,key); return; }
+      if(m.inflight.has(key)) return;
+
+      // 타일 bbox로 요청
+      const tileExtent = m.grid.getTileCoordExtent(tc);
+      m.inflight.add(key);
+      loadWFS_JSONP(m.typename, tileExtent, m.src, (u)=>{/* URL 로깅 필요시 여기서 가능 */})
+        .then(cnt=>{
+          const feats = m.src.getFeatures().slice(-cnt); // 방금 추가된 것들 추정
+          m.cache.set(key, { feats, added:true });
+          lruTouch(m,key);
+        })
+        .catch(()=>{/* 에러는 내부 로그 */})
+        .finally(()=> m.inflight.delete(key));
+    });
+
+    // 화면에서 사라진 타일은 그대로 두되(LRU가 치움), 필요 시 즉시 제거하려면 아래 주석 해제
+    // for (const [key, ent] of m.cache) { if(!keysNeeded.includes(key) && ent.added){ m.src.removeFeatures(ent.feats); ent.added=false; } }
+  }
+
   let mvTimer=null;
   map.on('moveend', ()=>{
     clearTimeout(mvTimer);
-    mvTimer=setTimeout(()=> [lySido,lySigg,lyEmd,lyRi].forEach(refreshAdminLayer), 200);
+    mvTimer=setTimeout(()=> [lySido,lySigg,lyEmd,lyRi].forEach(refreshAdminLayerTiled), WFS_DEBOUNCE);
   });
-  [lySido,lySigg,lyEmd,lyRi].forEach(refreshAdminLayer);
+  [lySido,lySigg,lyEmd,lyRi].forEach(refreshAdminLayerTiled);
 
-  /* ===== 더미 주차장 10개 (클릭 팝업 + 리스트 클릭 연동) ===== */
+  /* ===== 더미 주차장 10 & 하단 리스트(2행) ===== */
   const RADIUS_KM=3;
   const prkSrc=new ol.source.Vector(), prkLy=new ol.layer.Vector({ source:prkSrc, zIndex:120 });
   const P_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`;
@@ -256,7 +336,6 @@
   }
 
   const rowsState = { rows:[], byId:new Map() };
-
   function rebuildListRows(rows){
     rowsState.rows = rows; rowsState.byId.clear(); rows.forEach(r=>rowsState.byId.set(r.id,r));
     const grid=$('#list');
@@ -265,7 +344,6 @@
         <div class="nm">${i+1}. ${r.nm}</div>
         <div class="sub"><span class="badge">${r.dist.toFixed(2)} km</span> <span>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</span></div>
       </div>`).join('');
-
     grid.querySelectorAll('.card').forEach(el=>{
       el.addEventListener('click', ()=>{
         const r = rowsState.byId.get(el.dataset.id); if(!r) return;
@@ -274,17 +352,14 @@
         openPopup({title:r.nm, desc:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`}, c);
       });
     });
-
-    adjustListHeight(); // 2행 유지
+    adjustListHeight();
   }
-
   function adjustListHeight(){
+    if(listMin){ $('#listWrap').style.maxHeight = '0px'; placeErrdock(); return; }
     const grid = $('#list');
     const wrap = $('#listWrap');
     const first = grid.querySelector('.card');
-    if(!first || $('#bottom').classList.contains('collapsed')){
-      wrap.style.maxHeight = '0px'; placeErrdock(); return;
-    }
+    if(!first){ wrap.style.maxHeight = '0px'; placeErrdock(); return; }
     const cardH = first.getBoundingClientRect().height;
     const gap = parseFloat(getComputedStyle(grid).gap) || 8;
     const visibleRows = 2;
@@ -293,16 +368,13 @@
     wrap.style.maxHeight = Math.ceil(maxH) + 'px';
     placeErrdock();
   }
-
   function setDummyOn(lng,lat){
     prkSrc.clear();
     const rows = genDummy(lng,lat,10,RADIUS_KM);
-    const feats = rows.map(r=>{
-      return new ol.Feature({
-        geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng,r.lat])),
-        pid:r.id, title:r.nm, info:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`
-      });
-    });
+    const feats = rows.map(r=> new ol.Feature({
+      geometry:new ol.geom.Point(ol.proj.fromLonLat([r.lng,r.lat])),
+      pid:r.id, title:r.nm, info:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`
+    }));
     prkSrc.addFeatures(feats);
     rebuildListRows(rows);
   }
@@ -331,7 +403,7 @@
     if(!hit) closePopup();
   });
 
-  /* ===== 현재 위치 (스왑가드 + 캐시 + 이동/재측정 분리) ===== */
+  /* ===== 현재 위치 ===== */
   const meSrc=new ol.source.Vector(), meLy=new ol.layer.Vector({ source:meSrc, zIndex:130 }); map.addLayer(meLy);
   const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const stME=new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(ME_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' }) });
@@ -348,91 +420,54 @@
     }
     return { lng, lat };
   }
-
-  let lastMe = null; // {lng, lat}
-
   function setMe(lng,lat,fly=true){
     const fixed = coerceLngLat(lng,lat);
     lng = fixed.lng; lat = fixed.lat;
-
-    const same = lastMe ? (haversineKm(lastMe, {lng,lat})*1000 < SAME_POS_M) : false;
-
     meSrc.clear();
     const f=new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat])) }); f.setStyle(stME); meSrc.addFeature(f);
     if(fly){ view.animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); }
-
-    if(!same){ setDummyOn(lng,lat); }
-    lastMe = { lng, lat };
-    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}${same ? ' (재생성 생략)' : ''}`);
+    setDummyOn(lng,lat);
+    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
   }
-
-  function locate(fly=true){
+  function locate(auto=true){
     const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
     if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
     const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
     navigator.geolocation.getCurrentPosition(
-      p=> setMe(p.coords.longitude, p.coords.latitude, fly), // [lng,lat]
+      p=> setMe(p.coords.longitude, p.coords.latitude, auto), // [lng,lat]
       e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
     );
   }
 
-  function gotoCurrent(){
-    if(lastMe){
-      view.animate({ center: ol.proj.fromLonLat([lastMe.lng, lastMe.lat]), zoom: 15, duration: 350 });
-      ok('현재 위치로 이동');
-    }else{
-      locate(true);
-    }
-  }
-
-  document.getElementById('gotoBtn').onclick = gotoCurrent; // 이동 전용
-  document.getElementById('reLocBtn').onclick = ()=> locate(true); // 재측정
-  document.getElementById('fitBtn').onclick=()=>{
+  $('#locBtn').onclick=()=> locate(false);
+  $('#fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     prkSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,calcBottomPad(),20], maxZoom:17});
   };
 
-  /* === 최소화 토글 및 오류창 위치 보정 === */
+  // 리스트/오류창 배치 보정
   const errdock = $('#errdock');
-  const bottom  = $('#bottom');
-  const btnMinBottom = $('#minBottom');
-  const btnMinErr    = $('#minErr');
+  function calcBottomPad(){ return Math.ceil($('#bottom').getBoundingClientRect().height + 20); }
+  function placeErrdock(){ errdock.style.bottom = ($('#bottom').getBoundingClientRect().height + 12) + 'px'; }
 
-  function calcBottomPad(){
-    return Math.ceil(bottom.getBoundingClientRect().height + 20);
-  }
-  function placeErrdock(){
-    const h = bottom.getBoundingClientRect().height;
-    errdock.style.bottom = (h + 12) + 'px';
-  }
-  function toggleBottom(){
-    const collapsed = bottom.classList.toggle('collapsed');
-    btnMinBottom.setAttribute('aria-expanded', String(!collapsed));
-    btnMinBottom.textContent = collapsed ? '△' : '▽';
-    adjustListHeight();
-    placeErrdock();
-  }
-  function toggleErr(){
-    const collapsed = errdock.classList.toggle('collapsed');
-    btnMinErr.setAttribute('aria-expanded', String(!collapsed));
-    btnMinErr.textContent = collapsed ? '△' : '▽';
-    placeErrdock();
-  }
-  btnMinBottom.onclick = toggleBottom;
-  btnMinErr.onclick = toggleErr;
+  let listMin = false;
+  $('#minList').onclick = ()=>{
+    listMin = !listMin;
+    $('#listWrap').style.display = listMin ? 'none' : 'block';
+    adjustListHeight(); placeErrdock();
+  };
 
-  // 리사이징/회전 시 리스트 2행 유지 + 오류창 위치 보정
   const ro = new ResizeObserver(()=>{ adjustListHeight(); placeErrdock(); });
-  ro.observe(bottom);
+  ro.observe($('#bottom'));
   window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
   window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
-  // 부팅: 한 번 측위하여 초기 위치+더미 10개 세팅, 위치 보정
-  placeErrdock();
+  // 부팅
   locate(true);
+  updateBaseButton();
 })();
 </script>
 </body>
