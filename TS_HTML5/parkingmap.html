@@ -97,11 +97,11 @@
   const WFS_API= 'https://api.vworld.kr/req/wfs';
   const WMTS_URL = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
 
-  // ↓ 트래픽 절감 파라미터
-  const WFS_TILE_SIZE = 512;            // WFS 타일 BBOX 크기
-  const WFS_DEBOUNCE  = 500;            // moveend 디바운스
-  const MAX_TILE_CACHE= 150;            // LRU 상한
-  const WFS_PROPERTIES= 'ag_geom';      // 지오메트리만
+  // ↓ 트래픽 절감
+  const WFS_TILE_SIZE = 512;
+  const WFS_DEBOUNCE  = 500;
+  const MAX_TILE_CACHE= 150;
+  const WFS_PROPERTIES= 'ag_geom';
 
   const $ = (s)=>document.querySelector(s);
   const stat = $('#stat');
@@ -134,7 +134,7 @@
     source:new ol.source.XYZ({
       url:WMTS_URL,
       crossOrigin:'anonymous',
-      tilePixelRatio: 1,   // 레티나에서도 1배 타일만
+      tilePixelRatio: 1,
       transition: 0
     }),
     zIndex:0
@@ -147,10 +147,8 @@
       SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
       TYPENAME: typename,
       SRSNAME: SRS,
-      BBOX: bbox.join(','),              // xmin,ymin,xmax,ymax
-      MAXFEATURES:'1000',
-      OUTPUT:'text/javascript',          // JSONP
-      EXCEPTIONS:'text/xml',
+      BBOX: bbox.join(','), MAXFEATURES:'1000',
+      OUTPUT:'text/javascript', EXCEPTIONS:'text/xml',
       KEY: VW_KEY, DOMAIN: DOMAIN,
       FORMAT_OPTIONS: `callback:${cbName}`,
       PROPERTYNAME: WFS_PROPERTIES
@@ -217,13 +215,7 @@
     const src=new ol.source.Vector({ wrapX:true });
     const ly = new ol.layer.Vector({ source:src, style:st, zIndex: 40+minZ, visible:true });
     const grid = ol.tilegrid.createXYZ({ maxZoom: 20, tileSize: WFS_TILE_SIZE });
-    ly._meta={
-      typename, minZ, maxZ, src,
-      grid,
-      cache:new Map(),   // key -> {feats, added}
-      lru:[],            // keys
-      inflight:new Set() // keys
-    };
+    ly._meta={ typename, minZ, maxZ, src, grid, cache:new Map(), lru:[], inflight:new Set() };
     return ly;
   }
   const lySido = makeAdminLayer('lt_c_adsido_info', 6, 20, stSido);
@@ -253,27 +245,22 @@
     const z = Math.round(view.getZoom());
     const m = ly._meta;
     if(z < m.minZ || z > m.maxZ){ clearView(m); return; }
-
     const extent = view.calculateExtent(map.getSize());
     const zForTiles = Math.max(0, Math.min(20, z));
-
-    const keysNeeded = [];
     m.grid.forEachTileCoord(extent, zForTiles, tc=>{
       const key = `${zForTiles}/${tc[1]}/${tc[2]}`;
-      keysNeeded.push(key);
       const has = m.cache.get(key);
       if(has && has.added){ lruTouch(m,key); return; }
       if(m.inflight.has(key)) return;
-
       const tileExtent = m.grid.getTileCoordExtent(tc);
       m.inflight.add(key);
-      loadWFS_JSONP(m.typename, tileExtent, m.src, (u)=>{/* URL 필요시 표시 */})
+      loadWFS_JSONP(m.typename, tileExtent, m.src)
         .then(cnt=>{
           const feats = m.src.getFeatures().slice(-cnt);
           m.cache.set(key, { feats, added:true });
           lruTouch(m,key);
         })
-        .catch(()=>{/* 내부 로그 */})
+        .catch(()=>{})
         .finally(()=> m.inflight.delete(key));
     });
   }
@@ -372,10 +359,12 @@
     if(!hit) closePopup();
   });
 
-  /* ===== 현재 위치 ===== */
+  /* ===== 현재 위치 (버튼 누르면 반드시 지도 이동) ===== */
   const meSrc=new ol.source.Vector(), meLy=new ol.layer.Vector({ source:meSrc, zIndex:130 }); map.addLayer(meLy);
   const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const stME=new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(ME_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' }) });
+
+  let lastMe = null; // 마지막 위치 저장(동일 좌표면 더미 재생성 생략)
 
   function inKorea(lng, lat){ return lng>124 && lng<132 && lat>32 && lat<39; }
   function coerceLngLat(rawLng, rawLat){
@@ -392,24 +381,38 @@
   function setMe(lng,lat,fly=true){
     const fixed = coerceLngLat(lng,lat);
     lng = fixed.lng; lat = fixed.lat;
+
+    const same = lastMe && Math.abs(lastMe.lng-lng)<1e-7 && Math.abs(lastMe.lat-lat)<1e-7;
+    lastMe = {lng,lat};
+
     meSrc.clear();
     const f=new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat])) }); f.setStyle(stME); meSrc.addFeature(f);
     if(fly){ view.animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); }
-    setDummyOn(lng,lat);
+    if(!same) setDummyOn(lng,lat);   // 동일 좌표면 더미 재생성 생략
     ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
   }
-  function locate(auto=true){
+  function locate(fly=true){
     const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
-    if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
+    if(!httpsOk || !navigator.geolocation){
+      if(lastMe){ // 권한/환경 불가 시 마지막 위치로만 이동
+        view.animate({center:ol.proj.fromLonLat([lastMe.lng,lastMe.lat]), zoom:15, duration:400});
+        ok('마지막 위치로 이동');
+      }else{
+        warn('위치 권한/환경 문제(HTTPS 필요)');
+      }
+      return;
+    }
     const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
     navigator.geolocation.getCurrentPosition(
-      p=> setMe(p.coords.longitude, p.coords.latitude, auto), // [lng,lat]
+      p=> setMe(p.coords.longitude, p.coords.latitude, fly), // ★ fly=true면 지도 이동
       e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
     );
   }
 
-  $('#locBtn').onclick=()=> locate(false);
+  // ★ 버튼 클릭 시 반드시 지도도 이동하도록 fly=true
+  $('#locBtn').onclick=()=> locate(true);
+
   $('#fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
@@ -434,7 +437,7 @@
   window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
   window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
-  // 부팅
+  // 부팅 시 한 번 자동 위치 시도(지도 이동 포함)
   locate(true);
 })();
 </script>
