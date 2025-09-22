@@ -30,7 +30,7 @@
   .grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px}
   .card{
     padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#0e1a39; cursor:pointer;
-    display:grid; gap:4px; min-height:66px; /* 대략적 기준 높이(실제는 JS로 측정) */
+    display:grid; gap:4px; min-height:66px;
   }
   .card:hover{background:#122147}
   .nm{font-weight:700}
@@ -275,16 +275,13 @@
     const first = grid.querySelector('.card');
     if(!first){ wrap.style.maxHeight = '0px'; placeErrdock(); return; }
 
-    // 카드 실제 높이 + 그리드 행 간격 계산
     const cardH = first.getBoundingClientRect().height;
     const gap = parseFloat(getComputedStyle(grid).gap) || 8;
     const visibleRows = 2;
-    const padding = 8*2; // .list padding 8px 상하
+    const padding = 8*2;
     const maxH = cardH * visibleRows + gap * (visibleRows - 1) + padding;
 
     wrap.style.maxHeight = Math.ceil(maxH) + 'px';
-
-    // 오류창 위치도 재보정
     placeErrdock();
   }
 
@@ -325,7 +322,7 @@
     if(!hit) closePopup();
   });
 
-  /* ===== 현재 위치 (스왑가드 포함) ===== */
+  /* ===== 현재 위치 (스왑가드 + 캐시 + 이동 전용 버튼) ===== */
   const meSrc=new ol.source.Vector(), meLy=new ol.layer.Vector({ source:meSrc, zIndex:130 }); map.addLayer(meLy);
   const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const stME=new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(ME_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' }) });
@@ -343,30 +340,51 @@
     return { lng, lat };
   }
 
+  // ★ 추가: 현재 위치 캐시
+  let lastMe = null; // {lng, lat}
+
+  // ★ 변경: setMe → 이동 + (의미 있게 바뀐 경우에만) 더미 재생성
   function setMe(lng,lat,fly=true){
     const fixed = coerceLngLat(lng,lat);
     lng = fixed.lng; lat = fixed.lat;
 
+    const same = lastMe ? (haversineKm(lastMe, {lng,lat}) < 0.02) : false; // 20m 미만이면 동일 취급
+
     meSrc.clear();
     const f=new ol.Feature({ geometry:new ol.geom.Point(ol.proj.fromLonLat([lng,lat])) }); f.setStyle(stME); meSrc.addFeature(f);
     if(fly){ view.animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); }
-    setDummyOn(lng,lat);
-    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+
+    if(!same){ setDummyOn(lng,lat); }
+    lastMe = { lng, lat };
+    ok(`현재 위치 반영됨 · ${lat.toFixed(5)}, ${lng.toFixed(5)}${same ? ' (중복생성 방지)' : ''}`);
   }
 
-  function locate(auto=true){
+  // 지오로케이션
+  function locate(fly=true){
     const httpsOk = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
     if(!httpsOk || !navigator.geolocation){ warn('위치 권한/환경 문제(HTTPS 필요)'); return; }
     const opt={ enableHighAccuracy:true, maximumAge:3000, timeout:9000 };
     navigator.geolocation.getCurrentPosition(
-      p=> setMe(p.coords.longitude, p.coords.latitude, auto), // [lng,lat]
+      p=> setMe(p.coords.longitude, p.coords.latitude, fly), // [lng,lat]
       e=> { logERR('geolocation 실패','', `${e.code} ${e.message}`); warn('위치 실패'); },
       opt
     );
   }
 
-  $('#locBtn').onclick=()=> locate(false);
-  $('#fitBtn').onclick=()=>{
+  // ★ 추가: 현재 위치로 이동(캐시 우선, 없으면 측위)
+  function gotoCurrent(){
+    if(lastMe){
+      view.animate({ center: ol.proj.fromLonLat([lastMe.lng, lastMe.lat]), zoom: 15, duration: 350 });
+      ok('현재 위치로 이동');
+    }else{
+      locate(true);
+    }
+  }
+
+  // 버튼 바인딩: locate(false) → gotoCurrent()
+  document.getElementById('locBtn').onclick = gotoCurrent;
+
+  document.getElementById('fitBtn').onclick=()=>{
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     prkSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
@@ -376,7 +394,6 @@
   // === 하단 리스트 높이와 오류창이 겹치지 않도록 자동 보정 ===
   const errdock = $('#errdock');
   function calcBottomPad(){
-    // fit() padding bottom: 하단 패널 높이 + 여백
     const b = $('#bottom');
     return Math.ceil(b.getBoundingClientRect().height + 20);
   }
@@ -392,7 +409,7 @@
   window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
   window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
-  // 부팅
+  // 부팅: 한 번 측위하여 초기 위치+더미 10개 세팅
   locate(true);
 })();
 </script>
