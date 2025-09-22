@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>경계(WFS JSONP 타일+캐시) · VWorld WMTS/백지도 토글 · 더미10(2행 리스트) · 최소화버튼 · 에러로그(URL) · 트래픽 절감</title>
+<title>경계(WFS JSONP 타일+캐시) · VWorld WMTS만 · 더미10(2행 리스트) · 최소화버튼 · 에러로그(URL) · 트래픽 절감</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
@@ -23,7 +23,6 @@
   .title{font-weight:800}
   .muted{color:var(--muted)}
   .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
-  .btn.toggle{color:#93c5fd}
   .btn.min{ padding:4px 10px; font-weight:900; line-height:1 }
   .sep{flex:1}
 
@@ -66,7 +65,6 @@
     <div class="title">더미 주차장 10</div>
     <div class="muted" id="stat">초기화 중…</div>
     <div class="sep"></div>
-    <button class="btn toggle" id="baseToggle">배경: 백지도</button>
     <button class="btn min" id="minList" title="리스트 최소화">—</button>
   </div>
   <div class="row">
@@ -100,10 +98,10 @@
   const WMTS_URL = `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png`;
 
   // ↓ 트래픽 절감 파라미터
-  const WFS_TILE_SIZE = 512;            // WFS 타일 BBOX 크기(크게 → 요청 수↓)
-  const WFS_DEBOUNCE  = 500;            // moveend 이후 디바운스
-  const MAX_TILE_CACHE= 150;            // 타일 캐시 LRU 상한
-  const WFS_PROPERTIES= 'ag_geom';      // 속성 최소화 → 지오메트리만 요청
+  const WFS_TILE_SIZE = 512;            // WFS 타일 BBOX 크기
+  const WFS_DEBOUNCE  = 500;            // moveend 디바운스
+  const MAX_TILE_CACHE= 150;            // LRU 상한
+  const WFS_PROPERTIES= 'ag_geom';      // 지오메트리만
 
   const $ = (s)=>document.querySelector(s);
   const stat = $('#stat');
@@ -130,41 +128,18 @@
   window.addEventListener('error', e=> logERR('window.onerror: '+e.message,'', e.error?.stack||''));
   window.addEventListener('unhandledrejection', e=> logERR('unhandledrejection','', e.reason?.stack||String(e.reason)));
 
-  /* ===== 지도/배경 ===== */
+  /* ===== 지도/배경 (WMTS만) ===== */
   const view = new ol.View({ center: ol.proj.fromLonLat([127.5,36.4]), zoom: 7, maxZoom: 18, minZoom: 4 });
-
-  const WHITE_TILE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII=';
-
-  function makeWmtsBase(){
-    return new ol.layer.Tile({
-      source:new ol.source.XYZ({
-        url:WMTS_URL,
-        crossOrigin:'anonymous',
-        tilePixelRatio: 1,          // ✅ 레티나에서도 1배 타일만 요청
-        transition: 0
-      }),
-      zIndex:0
-    });
-  }
-  function makeBlankBase(){
-    return new ol.layer.Tile({
-      source:new ol.source.XYZ({ url:WHITE_TILE, crossOrigin:'anonymous', tilePixelRatio:1, transition:0 }),
-      zIndex:0
-    });
-  }
-  let blankMode = true;
-  let base = blankMode ? makeBlankBase() : makeWmtsBase();
+  const base = new ol.layer.Tile({
+    source:new ol.source.XYZ({
+      url:WMTS_URL,
+      crossOrigin:'anonymous',
+      tilePixelRatio: 1,   // 레티나에서도 1배 타일만
+      transition: 0
+    }),
+    zIndex:0
+  });
   const map  = new ol.Map({ target:'map', layers:[base], view });
-
-  function updateBaseButton(){ $('#baseToggle').textContent = '배경: ' + (blankMode ? '백지도' : '일반지도'); }
-  $('#baseToggle').onclick = ()=>{
-    blankMode = !blankMode;
-    map.removeLayer(base);
-    base = blankMode ? makeBlankBase() : makeWmtsBase();
-    map.getLayers().insertAt(0, base);
-    updateBaseButton();
-  };
-  updateBaseButton();
 
   /* ===== JSONP 유틸 ===== */
   function buildWFSUrlJSONP(typename, bbox, cbName){
@@ -178,7 +153,7 @@
       EXCEPTIONS:'text/xml',
       KEY: VW_KEY, DOMAIN: DOMAIN,
       FORMAT_OPTIONS: `callback:${cbName}`,
-      PROPERTYNAME: WFS_PROPERTIES      // ✅ 최소 속성만
+      PROPERTYNAME: WFS_PROPERTIES
     });
     return `${WFS_API}?${p.toString()}`;
   }
@@ -251,7 +226,7 @@
     };
     return ly;
   }
-  const lySido = makeAdminLayer('lt_c_adsido_info', 6, 20, stSido); // ▶ 더 늦게 로드되도록 상향
+  const lySido = makeAdminLayer('lt_c_adsido_info', 6, 20, stSido);
   const lySigg = makeAdminLayer('lt_c_adsigg_info', 10, 20, stSigg);
   const lyEmd  = makeAdminLayer('lt_c_ademd_info', 13, 22, stEmd);
   const lyRi   = makeAdminLayer('lt_c_adri_info', 15, 24, stRi);
@@ -274,16 +249,14 @@
     meta.src.clear();
     for(const [k,ent] of meta.cache){ ent.added=false; }
   }
-
   function refreshAdminLayerTiled(ly){
     const z = Math.round(view.getZoom());
     const m = ly._meta;
     if(z < m.minZ || z > m.maxZ){ clearView(m); return; }
 
     const extent = view.calculateExtent(map.getSize());
-    const zForTiles = Math.max(0, Math.min(20, z)); // 안전 클램프
+    const zForTiles = Math.max(0, Math.min(20, z));
 
-    // 보이는 타일만 순회
     const keysNeeded = [];
     m.grid.forEachTileCoord(extent, zForTiles, tc=>{
       const key = `${zForTiles}/${tc[1]}/${tc[2]}`;
@@ -292,21 +265,17 @@
       if(has && has.added){ lruTouch(m,key); return; }
       if(m.inflight.has(key)) return;
 
-      // 타일 bbox로 요청
       const tileExtent = m.grid.getTileCoordExtent(tc);
       m.inflight.add(key);
-      loadWFS_JSONP(m.typename, tileExtent, m.src, (u)=>{/* URL 로깅 필요시 여기서 가능 */})
+      loadWFS_JSONP(m.typename, tileExtent, m.src, (u)=>{/* URL 필요시 표시 */})
         .then(cnt=>{
-          const feats = m.src.getFeatures().slice(-cnt); // 방금 추가된 것들 추정
+          const feats = m.src.getFeatures().slice(-cnt);
           m.cache.set(key, { feats, added:true });
           lruTouch(m,key);
         })
-        .catch(()=>{/* 에러는 내부 로그 */})
+        .catch(()=>{/* 내부 로그 */})
         .finally(()=> m.inflight.delete(key));
     });
-
-    // 화면에서 사라진 타일은 그대로 두되(LRU가 치움), 필요 시 즉시 제거하려면 아래 주석 해제
-    // for (const [key, ent] of m.cache) { if(!keysNeeded.includes(key) && ent.added){ m.src.removeFeatures(ent.feats); ent.added=false; } }
   }
 
   let mvTimer=null;
@@ -405,7 +374,7 @@
 
   /* ===== 현재 위치 ===== */
   const meSrc=new ol.source.Vector(), meLy=new ol.layer.Vector({ source:meSrc, zIndex:130 }); map.addLayer(meLy);
-  const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
+  const ME_SVG=`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`;
   const stME=new ol.style.Style({ image:new ol.style.Icon({ src:'data:image/svg+xml;utf8,'+encodeURIComponent(ME_SVG), anchor:[0.5,1], anchorXUnits:'fraction', anchorYUnits:'fraction' }) });
 
   function inKorea(lng, lat){ return lng>124 && lng<132 && lat>32 && lat<39; }
@@ -467,7 +436,6 @@
 
   // 부팅
   locate(true);
-  updateBaseButton();
 })();
 </script>
 </body>
