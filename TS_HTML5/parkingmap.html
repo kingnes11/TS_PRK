@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>브이월드 WMS주소생성 + WFS(lt_c_uq111) · 리스트/필터 · 오류로그 · OL 10.6.1</title>
+<title>브이월드 cbnd WMS + lt_c_uq111 WFS 폴백 · 리스트/필터 · 오류로그(에러만) · OL 10.6.1</title>
 
 <!-- ✅ OpenLayers 동적 로더: 10.6.1 (로컬 → CDN 폴백) -->
 <script>
@@ -61,26 +61,12 @@
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif}
   #map{position:fixed;inset:0}
 
-  /* 좌측 패널 */
+  /* 좌측 패널(기본) */
   .side{
     position:fixed; left:12px; top:12px; bottom:12px; width:360px; z-index:30;
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:12px;
     display:flex; flex-direction:column; gap:10px;
   }
-  /* 반응형: 폰(좁음) */
-  @media (max-width: 420px){
-    .side{ width:88vw; left:6px; top:6px; bottom:auto; max-height:58vh; overflow:hidden }
-    .list{ max-height:40vh }
-  }
-  /* 큰 폰/작은 태블릿 세로 */
-  @media (min-width:421px) and (max-width: 768px){
-    .side{ width:min(360px, 46vw); }
-  }
-  /* 태블릿 가로 이상 */
-  @media (min-width:769px) and (max-width: 1024px){
-    .side{ width:340px }
-  }
-
   .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
   .title{font-weight:800; display:flex; gap:10px; align-items:center}
   .muted{color:var(--muted)}
@@ -113,7 +99,7 @@
   .ol-popup .sub2{color:#4b5563;font-size:.9rem}
   .ol-popup .x{position:absolute;right:6px;top:6px;border:0;background:transparent;color:#6b7280;font-size:18px;cursor:pointer;line-height:1}
 
-  /* 오류 로그 도크 + FAB (ERR만 표시) */
+  /* 오류 로그 도크 + FAB (에러만 출력) */
   .errdock{
     position:fixed; right:12px; bottom:68px; z-index:1000;
     width:min(560px, calc(100% - 24px));
@@ -148,6 +134,31 @@
   .errfab.error .dot{background:#ef4444}
   .errfab .cnt{background:#ef4444;color:#fff;border-radius:999px;padding:2px 8px;font-size:.82rem;display:none}
   .errfab.error .cnt{display:inline-block}
+
+  /* ===== 반응형: iPhone/갤럭시/태블릿 ===== */
+  /* 작은 폰(≤380px): 패널 폭 꽉 채우고 높이 축소 */
+  @media (max-width:380px){
+    .side{ left:8px; right:8px; width:auto; top:8px; bottom:auto; max-height:62vh; overflow:auto }
+    .list{ min-height:120px; max-height:40vh }
+    .errdock{ left:8px; right:8px; width:auto }
+  }
+  /* 일반 폰(381~480px) */
+  @media (min-width:381px) and (max-width:480px){
+    .side{ left:10px; right:10px; width:auto; top:10px; bottom:auto; max-height:64vh; overflow:auto }
+    .list{ min-height:140px; max-height:42vh }
+    .errdock{ left:10px; right:10px; width:auto }
+  }
+  /* 큰 폰/작은 태블릿(481~768px) */
+  @media (min-width:481px) and (max-width:768px){
+    .side{ width:380px; top:10px; bottom:10px }
+    .list{ min-height:160px }
+    .errdock{ width:min(520px, calc(100% - 20px)) }
+  }
+  /* 태블릿(769~1024px) */
+  @media (min-width:769px) and (max-width:1024px){
+    .side{ width:420px }
+    .errdock{ width:min(560px, calc(100% - 24px)) }
+  }
 </style>
 </head>
 <body>
@@ -163,7 +174,7 @@
   <div class="row">
     <button class="btn" id="locBtn">현재 위치</button>
     <button class="btn ghost" id="fitBtn">전체 보기</button>
-    <span id="stat" class="muted" style="margin-left:auto">위치 대기…</span>
+    <span id="stat" class="muted" style="margin-left:auto">초기화 중…</span>
   </div>
 
   <div class="chipbar" id="typeBar" role="group" aria-label="주차장 형태 필터">
@@ -173,15 +184,10 @@
     <div class="chip" data-type="부설">부설</div>
   </div>
 
-  <div class="row" style="gap:10px">
-    <label class="muted"><input id="uqToggle" type="checkbox" checked> 지적(LT_C_UQ111)</label>
-    <button class="btn ghost" id="showWmsUrl">WMS주소</button>
-  </div>
-
   <div id="list" class="list" role="listbox" aria-label="주차장 목록"></div>
 </aside>
 
-<!-- 오류 로그 도크 + FAB (ERR만 출력) -->
+<!-- 오류 로그 도크 + FAB (에러만) -->
 <section class="errdock" id="errdock" aria-label="오류 로그">
   <div class="hdr">
     <div class="title">오류 로그</div>
@@ -202,7 +208,6 @@
   /* ===== 기본 설정 ===== */
   const VW_KEY = 'CF9A371B-35A6-3822-8315-6592C8342E82';
   const DOMAIN = 'kingnes11.github.io';
-  const DEMO_N = 1000;
   const RADIUS_KM = 5.0;
   document.getElementById('radiusLabel').textContent = RADIUS_KM;
 
@@ -211,9 +216,18 @@
   const ok   = (m)=> stat.innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
   const warn = (m)=> stat.innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
 
-  /* ===== 오류 로그 UI (ERR만) ===== */
+  /* ===== 오류 로그(UI에는 ERR만) + 스팸 쓰로틀 ===== */
+  const LOG_UI_LEVEL = 'ERR';
+  const ERR_THROTTLE_MS = 2000;
+  const lastErrTime = new Map(); // key->time
+
   function ensureErrUI(){
-    let dock = $('#errdock'), body=$('#errbody'), count=$('#errcount'), fab=$('#errFab'), cntFab=$('#errCntFab');
+    let dock = $('#errdock');
+    let body = $('#errbody');
+    let count= $('#errcount');
+    let fab  = $('#errFab');
+    let cntFab = $('#errCntFab');
+
     $('#closeErr').onclick = ()=>{ dock.classList.remove('open'); fab.setAttribute('aria-expanded','false'); };
     $('#clearErr').onclick = ()=>{ body.innerHTML=''; count.textContent='0건'; cntFab.textContent='0'; fab.classList.remove('error'); };
     $('#copyErr').onclick  = async ()=>{
@@ -227,105 +241,220 @@
     return { dock, body, count, fab, cntFab };
   }
   const ERRUI = ensureErrUI();
-
-  // 로그: 도크엔 ERR만, 콘솔엔 모두
   const logs = [];
   const tstr = ()=> new Date().toLocaleTimeString();
-  function appendErrRow(level, msg, extra){
+
+  function appendRow(level, msg, extra){
+    if(level !== LOG_UI_LEVEL) return; // UI에는 ERR만
+    const key = level + '::' + msg;
+    const now = Date.now();
+    const prev = lastErrTime.get(key)||0;
+    if(now - prev < ERR_THROTTLE_MS) return; // 중복 억제
+    lastErrTime.set(key, now);
+
     const div = document.createElement('div'); div.className='logrow';
     div.innerHTML = `<span class="time">[${tstr()}]</span><span class="lvl lvl-${level}">${level}</span><span>${msg}</span>` + (extra ? `<div class="muted" style="margin-left:8px;white-space:pre-wrap">${extra}</div>` : '');
     ERRUI.body.appendChild(div); ERRUI.body.scrollTop = ERRUI.body.scrollHeight;
-  }
-  function logInfo(m,d){ console.info('[INFO]', m, d||''); }
-  function logWarn(m,d){ console.warn('[WARN]', m, d||''); }
-  function logErr(m,d){
-    console.error('[ERR]', m, d||'');
-    const text = typeof d==='string' ? d : (d ? (d.stack||d.message||JSON.stringify(d)) : '');
-    logs.push({t:Date.now(), level:'ERR', msg:m, detail:text});
-    appendErrRow('ERR', m, text);
-    const errCnt = logs.length;
-    ERRUI.count.textContent = `${errCnt}건`;
+
+    const errCnt = (Number(ERRUI.cntFab.textContent)||0) + (level==='ERR'?1:0);
     ERRUI.cntFab.textContent = String(errCnt);
     if(errCnt>0) ERRUI.fab.classList.add('error');
+    ERRUI.count.textContent = `${ERRUI.body.querySelectorAll('.logrow').length}건`;
   }
+
+  function log(level, msg, detail){
+    const text = typeof detail==='string' ? detail : (detail ? (detail.stack||JSON.stringify(detail)) : '');
+    logs.push({t:Date.now(), level, msg, detail:text});
+    appendRow(level, msg, text);
+  }
+  const logErr=(m,d)=>log('ERR',m,d);
+
+  // 전역 에러 캡처(에러만)
   window.addEventListener('error', (e)=> logErr('window.onerror: '+e.message, e.error||e));
   window.addEventListener('unhandledrejection', (e)=> logErr('unhandledrejection', e.reason||e));
 
-  /* ===== VWorld URL 유틸: 축순서 예외 + 주소 생성 ===== */
-  const AXIS_SWAP_CRS = new Set(['EPSG:4326','EPSG:5185','EPSG:5186','EPSG:5187','EPSG:5188']);
-  function formatBBOX(ext, crs){
-    const [minX,minY,maxX,maxY] = ext;
-    return AXIS_SWAP_CRS.has(String(crs).toUpperCase())
-      ? [minY,minX,maxY,maxX].join(',')
-      : [minX,minY,maxX,maxY].join(',');
-  }
-  function getExtentInCRS(map, crs){
-    const size = map.getSize();
-    const extent3857 = map.getView().calculateExtent(size);
-    const t = String(crs).toUpperCase();
-    if(t==='EPSG:3857' || t==='EPSG:900913') return extent3857;
-    try{ return ol.proj.transformExtent(extent3857, 'EPSG:3857', t); }
-    catch(e){ logWarn('좌표변환 실패(해당 CRS 등록 필요) → 3857 사용', e); return extent3857; }
-  }
-  function buildWmsUrl(map, {crs='EPSG:900913', layers='lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun', styles='lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line', width, height, key=VW_KEY, domain=DOMAIN, extent=null}={}){
-    const size = map.getSize();
-    const W = width  ?? size[0];
-    const H = height ?? size[1];
-    const ex = extent ?? getExtentInCRS(map, crs);
-    const bboxStr = formatBBOX(ex, crs);
+  /* ===== 헬퍼: WMS/WFS URL 빌더 ===== */
+  const WMS_BASE = 'https://api.vworld.kr/req/wms';
+  const WFS_BASE = 'https://api.vworld.kr/req/wfs';
+  const WFS_JSONP_BASE = 'https://map.vworld.kr/js/wfs.do';
+
+  function buildWMSUrl(bbox){
     const p = new URLSearchParams({
       SERVICE:'WMS', REQUEST:'GetMap', VERSION:'1.3.0',
-      LAYERS:layers, STYLES:styles, CRS:crs,
-      BBOX:bboxStr, WIDTH:String(W), HEIGHT:String(H),
+      LAYERS:'lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun',
+      STYLES:'lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line',
+      CRS:'EPSG:900913',
+      BBOX:bbox.join(','),
+      WIDTH:'256', HEIGHT:'256',
       FORMAT:'image/png', TRANSPARENT:'false', BGCOLOR:'0xFFFFFF',
-      EXCEPTIONS:'text/xml', KEY:key, DOMAIN:domain
+      EXCEPTIONS:'text/xml',
+      KEY: VW_KEY, DOMAIN: DOMAIN
     });
-    return `https://api.vworld.kr/req/wms?${p.toString()}`;
+    return `${WMS_BASE}?${p.toString()}`;
   }
-  function buildWfsUrl(map, {crs='EPSG:900913', typeName='lt_c_uq111', maxFeatures=400, propertyName='mnum,sido_cd,sigungu_cd,dyear,dnum,ucode,bon_bun,bu_bun,uname,sido_name,sigg_name,ag_geom', output='application/json', key=VW_KEY, domain=DOMAIN, extra={}, extent=null}={}){
-    const ex = extent ?? getExtentInCRS(map, crs);
-    const bboxStr = formatBBOX(ex, crs);
+
+  function buildWFSUrlJSON(extent900913){
     const p = new URLSearchParams({
       SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
-      TYPENAME:typeName, BBOX:bboxStr, SRSNAME:crs,
-      MAXFEATURES:String(maxFeatures),
-      PROPERTYNAME:propertyName,
-      OUTPUT:output, EXCEPTIONS:'text/xml',
-      APIKEY:key, DOMAIN:domain
+      TYPENAME:'lt_c_uq111',
+      SRSNAME:'EPSG:900913',
+      BBOX: extent900913.join(','),
+      MAXFEATURES:'400',
+      PROPERTYNAME:'mnum,sido_cd,sigungu_cd,dyear,dnum,ucode,bon_bun,bu_bun,uname,sido_name,sigg_name,ag_geom',
+      OUTPUT:'application/json',
+      EXCEPTIONS:'text/xml',
+      KEY: VW_KEY, DOMAIN: DOMAIN
     });
-    Object.entries(extra).forEach(([k,v])=> p.set(k,v));
-    const base = (output && output.toLowerCase().includes('json')) ? 'https://map.vworld.kr/js/wfs.do' : 'https://api.vworld.kr/req/wfs';
-    return `${base}?${p.toString()}`;
+    return `${WFS_BASE}?${p.toString()}`;
+  }
+
+  function buildWFSUrlJSONP(extent900913, cbName){
+    const p = new URLSearchParams({
+      SERVICE:'WFS', REQUEST:'GetFeature', VERSION:'1.1.0',
+      TYPENAME:'LT_C_UQ111', // JSONP는 대문자 타입명이 안전
+      SRSNAME:'EPSG:900913',
+      BBOX: extent900913.join(','),
+      MAXFEATURES:'400',
+      PROPERTYNAME:'mnum,sido_cd,sigungu_cd,dyear,dnum,ucode,bon_bun,bu_bun,uname,sido_name,sigg_name,ag_geom',
+      OUTPUT:'text/xml; subType=gml/2.1.2',
+      EXCEPTIONS:'text/xml',
+      FORMAT_OPTIONS:`callback:${cbName}`,
+      APIKEY: VW_KEY, DOMAIN: DOMAIN
+    });
+    return `${WFS_JSONP_BASE}?${p.toString()}`;
   }
 
   /* ===== 앱 시작 ===== */
   function startApp(){
-    /* ---- 베이스맵: VWorld WMTS → 에러 시 OSM ---- */
-    const wmts = new ol.layer.Tile({
-      source: new ol.source.XYZ({
-        url: `https://api.vworld.kr/req/wmts/1.0.0/${VW_KEY}/Base/{z}/{y}/{x}.png?domain=${DOMAIN}`,
-        maxZoom: 18, minZoom: 5, crossOrigin:'anonymous'
+    ok('OpenLayers 10.6.1 로드 완료');
+
+    // 지도
+    const osm = new ol.layer.Tile({ source:new ol.source.OSM(), zIndex:0, visible:true });
+
+    const view = new ol.View({
+      center: ol.proj.fromLonLat([127.5,36.4]),
+      zoom: 7,
+      maxZoom: 18,  // z>18 방지
+      minZoom: 4
+    });
+
+    const map = new ol.Map({ target:'map', layers:[osm], view });
+
+    /* ---- cbnd WMS ---- */
+    const wmsSource = new ol.source.TileWMS({
+      url: WMS_BASE,
+      params:{
+        SERVICE:'WMS', REQUEST:'GetMap', VERSION:'1.3.0',
+        LAYERS:'lp_pa_cbnd_bonbun,lp_pa_cbnd_bubun',
+        STYLES:'lp_pa_cbnd_bonbun_line,lp_pa_cbnd_bubun_line',
+        CRS:'EPSG:900913',
+        FORMAT:'image/png', TRANSPARENT:false, BGCOLOR:'0xFFFFFF',
+        KEY: VW_KEY, DOMAIN: DOMAIN
+      },
+      crossOrigin: 'anonymous'
+    });
+    const wmsLayer = new ol.layer.Tile({ source:wmsSource, zIndex:200, opacity:0.9, visible:true });
+    map.addLayer(wmsLayer);
+
+    // 타일 에러 시 → WFS 폴백(한 번만)
+    let wfsActivated = false;
+    wmsSource.on('tileloaderror', (evt)=>{
+      const tile = evt && evt.tile;
+      logErr('WMS cbnd 타일 오류 → WFS(JSON) 폴백', buildWMSUrl(tile?.getKey? (tile.getKey(), []) : []));
+      if(!wfsActivated){ activateWFS(); wfsActivated=true; }
+    });
+
+    /* ---- WFS 벡터 (JSON 1차 → JSONP 2차) ---- */
+    const wfsSource = new ol.source.Vector({ wrapX:true });
+    const wfsLayer  = new ol.layer.Vector({
+      source: wfsSource,
+      style: new ol.style.Style({
+        stroke:new ol.style.Stroke({ color:[239,68,68,0.95], width:2 }),
+        fill:  new ol.style.Fill({ color:[239,68,68,0.05] })
       }),
-      zIndex: 0, visible: true
+      zIndex: 210,
+      visible: true
     });
-    const osm = new ol.layer.Tile({ source:new ol.source.OSM(), zIndex:0, visible:false });
+    map.addLayer(wfsLayer);
 
-    const map = new ol.Map({
-      target:'map',
-      layers:[ wmts, osm ],
-      view: new ol.View({ center: ol.proj.fromLonLat([127.5,36.5]), zoom: 7, maxZoom: 18, minZoom: 5 })
-    });
-
-    let switched = false;
-    function switchToOSM(reason){
-      if(switched) return; switched = true;
-      wmts.setVisible(false); osm.setVisible(true);
-      warn(`브이월드 타일 문제(${reason}) → OSM로 전환`);
-      logErr('WMTS tile error → OSM fallback', reason);
+    function extentTo900913(extent3857){
+      // 3857 == 900913 동일. 그냥 반환.
+      return extent3857.slice(0);
     }
-    wmts.getSource().on('tileloaderror', ()=> switchToOSM('tileloaderror'));
 
-    /* ---- 아이콘/스타일 (주차장/현재위치/반경) ---- */
+    function loadWFS_JSON(extent){
+      const ex = extentTo900913(extent);
+      const url = buildWFSUrlJSON(ex);
+      return fetch(url, {mode:'cors'})
+        .then(res=>{ if(!res.ok) throw new Error('HTTP '+res.status); return res.json(); })
+        .then(json=>{
+          const fmt = new ol.format.GeoJSON();
+          const feats = fmt.readFeatures(json, { dataProjection:'EPSG:900913', featureProjection:'EPSG:3857' });
+          if(!feats || feats.length===0) return 0;
+          wfsSource.addFeatures(feats);
+          return feats.length;
+        });
+    }
+
+    function loadWFS_JSONP(extent){
+      return new Promise((resolve,reject)=>{
+        const ex = extentTo900913(extent);
+        const cb = `vw_cb_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+        const url = buildWFSUrlJSONP(ex, cb);
+        const s = document.createElement('script');
+        let timeout = setTimeout(()=>{
+          s.remove(); reject(new Error('jsonp_timeout'));
+        }, 12000);
+
+        window[cb] = function(payload){
+          clearTimeout(timeout); s.remove();
+          try{
+            let xmlText = payload;
+            if(typeof payload !== 'string'){
+              // 일부 환경에서 XMLDocument로 올 수도 있음
+              const ser = new XMLSerializer();
+              xmlText = ser.serializeToString(payload);
+            }
+            const doc = (new DOMParser()).parseFromString(xmlText, 'text/xml');
+            const fmt = new ol.format.WFS({ gmlFormat: new ol.format.GML2() });
+            const feats = fmt.readFeatures(doc, { dataProjection:'EPSG:900913', featureProjection:'EPSG:3857' });
+            if(feats && feats.length) wfsSource.addFeatures(feats);
+            resolve(feats.length||0);
+          }catch(e){
+            reject(e);
+          } finally{
+            delete window[cb];
+          }
+        };
+        s.src = url;
+        s.onerror = ()=>{ clearTimeout(timeout); s.remove(); delete window[cb]; reject(new Error('JSONP script_error\n'+url)); };
+        document.head.appendChild(s);
+      });
+    }
+
+    function activateWFS(){
+      const loader = (extent, resolution, projection)=>{
+        const ex = extent.slice(0);
+        // 이미 로드된 범위 중복 최소화: 간단히 clear 후 재요청(데모 수준)
+        wfsSource.clear(true);
+
+        loadWFS_JSON(ex)
+          .then(cnt=>{/* ok */})
+          .catch(err=>{
+            logErr('WFS(JSON) 실패 → JSONP 폴백', (err && (err.stack||err.message))||String(err));
+            return loadWFS_JSONP(ex);
+          })
+          .catch(err=>{
+            logErr('WFS(JSONP) 실패', (err && (err.stack||err.message))||String(err));
+          });
+      };
+      wfsSource.setLoader(loader);
+      // 현재 화면 범위 첫 로드
+      const extent = map.getView().calculateExtent(map.getSize());
+      wfsSource.loader_(extent, map.getView().getResolution(), map.getView().getProjection());
+    }
+
+    /* ---- 현재 위치 & 데모 주차장 ---- */
     const PARK_SVG =
       `<svg xmlns='http://www.w3.org/2000/svg' width='36' height='36' viewBox='0 0 36 36'>
          <circle cx='18' cy='18' r='16' fill='#2563eb'/>
@@ -350,12 +479,11 @@
       fill:  new ol.style.Fill({ color:[239,68,68,0.08] })
     });
 
-    /* ---- 소스/레이어 ---- */
-    const meSrc   = new ol.source.Vector();           // 현재 위치 + 반경 원
-    const meLayer = new ol.layer.Vector({ source: meSrc, zIndex: 120 });
+    const meSrc   = new ol.source.Vector();
+    const meLayer = new ol.layer.Vector({ source: meSrc, zIndex:120 });
     map.addLayer(meLayer);
 
-    const rawSrc  = new ol.source.Vector();           // 더미 주차장 원본
+    const rawSrc  = new ol.source.Vector();
     const clusterSrc = new ol.source.Cluster({ distance: 40, minDistance: 10, source: rawSrc });
     const clusterLy  = new ol.layer.Vector({
       source: clusterSrc,
@@ -379,45 +507,9 @@
         const m = members[0];
         return (m && m.getStyle && m.getStyle()) || stylePark;
       },
-      zIndex: 110
+      zIndex:110
     });
     map.addLayer(clusterLy);
-
-    /* ---- 팝업/리스트 ---- */
-    const popupEl = document.createElement('div');
-    popupEl.className='ol-popup';
-    popupEl.innerHTML = `<button class="x" aria-label="닫기">×</button><div class="tit"></div><div class="sub2 addr"></div><div class="sub2 meta"></div>`;
-    const overlay = new ol.Overlay({ element: popupEl, positioning:'bottom-center', stopEvent:true, offset:[0,-14] });
-    map.addOverlay(overlay);
-    const closePopup = ()=> overlay.setPosition(undefined);
-    popupEl.querySelector('.x').addEventListener('click', closePopup);
-    document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
-
-    function openPopupForFeature(p, coord){
-      popupEl.querySelector('.tit').textContent  = p.nm || '주차장';
-      popupEl.querySelector('.addr').textContent = p.addr || '';
-      popupEl.querySelector('.meta').textContent = `형태: ${p.type||'-'} · 좌표: ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}`;
-      overlay.setPosition(coord);
-      $('#sel').textContent = p.nm || '-';
-    }
-
-    map.on('singleclick', (evt)=>{
-      let handled=false;
-      map.forEachFeatureAtPixel(evt.pixel,(feature, layer)=>{
-        if(layer!==clusterLy) return;
-        const members = feature.get('features')||[];
-        if(members.length>1){
-          const ex=ol.extent.createEmpty(); members.forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
-          map.getView().fit(ex,{duration:250,maxZoom:17,padding:[30,380,30,30]});
-        }else if(members.length===1){
-          const f=members[0], coord=f.getGeometry().getCoordinates();
-          openPopupForFeature(f.getProperties(), coord);
-          highlightList(f.get('__id'));
-        }
-        handled=true; return true;
-      },{hitTolerance:6});
-      if(!handled) closePopup();
-    });
 
     function haversineKm(a,b){
       const R=6371,toRad=d=>d*Math.PI/180;
@@ -426,7 +518,7 @@
       const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
       return 2*R*Math.asin(Math.sqrt(t));
     }
-    function generateDummyAround(lng, lat, n=DEMO_N, rKm=RADIUS_KM){
+    function generateDummyAround(lng, lat, n=600, rKm=RADIUS_KM){
       const types=['노상','노외','부설']; const rows=[];
       for(let i=0;i<n;i++){
         const rkm=Math.random()*rKm, ang=Math.random()*Math.PI*2;
@@ -461,7 +553,11 @@
       listEl.innerHTML = rows.map((r,i)=>`
         <div class="item" data-id="${r.id}" role="option" tabindex="0">
           <div class="nm">${i+1}. ${r.nm}</div>
-          <div class="sub"><span class="badge">${r.type}</span><span class="dist">${r.distKm.toFixed(2)} km</span><span>${r.addr}</span></div>
+          <div class="sub">
+            <span class="badge">${r.type}</span>
+            <span class="dist">${r.distKm.toFixed(2)} km</span>
+            <span>${r.addr}</span>
+          </div>
         </div>`).join('');
       listEl.querySelectorAll('.item').forEach(el=>{
         el.addEventListener('click', ()=> focusItem(el.dataset.id));
@@ -476,7 +572,7 @@
       if(!r) return;
       const coord=ol.proj.fromLonLat([r.lng,r.lat]);
       map.getView().setCenter(coord); map.getView().setZoom(16);
-      openPopupForFeature(r, coord);
+      openPopupForPoint(r, coord);
       highlightList(id);
     }
     function applyFilter(){
@@ -493,28 +589,57 @@
       applyFilter();
     });
 
-    // 현재 위치/반경 원/시드
+    /* ---- 팝업(주차장) ---- */
+    const popupEl = document.createElement('div');
+    popupEl.className='ol-popup';
+    popupEl.innerHTML = `<button class="x" aria-label="닫기">×</button><div class="tit"></div><div class="sub2 addr"></div><div class="sub2 meta"></div>`;
+    const overlay = new ol.Overlay({ element: popupEl, positioning:'bottom-center', stopEvent:true, offset:[0,-14] });
+    map.addOverlay(overlay);
+    const closePopup = ()=> overlay.setPosition(undefined);
+    popupEl.querySelector('.x').addEventListener('click', closePopup);
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePopup(); });
+
+    function openPopupForPoint(r, coord){
+      popupEl.querySelector('.tit').textContent  = r.nm || '주차장';
+      popupEl.querySelector('.addr').textContent = r.addr || '';
+      popupEl.querySelector('.meta').textContent = `형태: ${r.type||'-'} · 좌표: ${Number(r.lat).toFixed(5)}, ${Number(r.lng).toFixed(5)}`;
+      overlay.setPosition(coord);
+      $('#sel').textContent = r.nm || '-';
+    }
+
+    map.on('singleclick', (evt)=>{
+      let handled=false;
+      map.forEachFeatureAtPixel(evt.pixel,(feature, layer)=>{
+        if(layer!==clusterLy) return;
+        const members = feature.get('features')||[];
+        if(members.length>1){
+          const ex=ol.extent.createEmpty(); members.forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
+          map.getView().fit(ex,{duration:250,maxZoom:17,padding:[30,380,30,30]}); // fit 상한 17
+        }else if(members.length===1){
+          const f=members[0], coord=f.getGeometry().getCoordinates();
+          const p=f.getProperties();
+          openPopupForPoint(p, coord);
+          highlightList(p.__id);
+        }
+        handled=true; return true;
+      },{hitTolerance:6});
+      if(!handled) closePopup();
+    });
+
+    /* ---- 현재 위치/시드 ---- */
     function setMeAndSeed(lng, lat, msg){
       meSrc.clear();
       const center = ol.proj.fromLonLat([lng,lat]);
       const me = new ol.Feature({ geometry:new ol.geom.Point(center) }); me.setStyle(styleMe); meSrc.addFeature(me);
       const circle = new ol.Feature({ geometry:new ol.geom.Circle(center, RADIUS_KM*1000) }); circle.setStyle(styleCircle); meSrc.addFeature(circle);
 
-      ROWS_ALL = generateDummyAround(lng, lat, DEMO_N, RADIUS_KM);
+      ROWS_ALL = generateDummyAround(lng, lat, 600, RADIUS_KM);
       applyFilter();
 
       map.getView().setCenter(center); map.getView().setZoom(15);
-      ok(`${msg} · 반경 ${RADIUS_KM}km · 더미 ${DEMO_N}개`);
-      console.info('[INFO] seeded', `${msg} @ ${lng.toFixed(5)}, ${lat.toFixed(5)}`);
-
-      // 지적 WFS 레이어(토글)
-      if(uqLayer){
-        uqLayer.getSource().refresh(); // 새 bbox로
-      }
-
-      // 현재 뷰 기준 WMS 주소 생성(표시만)
-      lastWmsUrl = buildWmsUrl(map, { crs:'EPSG:900913' });
+      ok(`${msg} · 반경 ${RADIUS_KM}km · 더미 ${ROWS_ALL.length}개`);
     }
+
     function fitAll(){
       const ex=ol.extent.createEmpty();
       meSrc.getFeatures().forEach(f=> ol.extent.extend(ex, f.getGeometry().getExtent()));
@@ -523,91 +648,32 @@
     }
     $('#fitBtn').addEventListener('click', fitAll);
 
-    /* ---- 지적 WFS 레이어 생성 (JSON) ---- */
-    let uqLayer = null;
-    function addUqLayer(){
-      if(uqLayer) return;
-      const fmt = new ol.format.GeoJSON({ dataProjection:'EPSG:900913', featureProjection: map.getView().getProjection() });
-      const src = new ol.source.Vector({
-        format: fmt,
-        strategy: ol.loadingstrategy.bbox,
-        url: (extent, res, proj)=>{
-          let ext = extent;
-          try{
-            if(proj && proj.getCode && proj.getCode().toUpperCase()!=='EPSG:900913'){
-              ext = ol.proj.transformExtent(extent, proj, 'EPSG:900913');
-            }
-          }catch(e){ logWarn('WFS extent 변환 실패', e); }
-          const url = buildWfsUrl(map, {
-            crs:'EPSG:900913',
-            typeName:'lt_c_uq111',
-            maxFeatures:400,
-            propertyName:'mnum,sido_cd,sigungu_cd,dyear,dnum,ucode,bon_bun,bu_bun,uname,sido_name,sigg_name,ag_geom',
-            output:'application/json',
-            extent: ext
-          });
-          console.info('[INFO] WFS request(JSON)', url);
-          return url;
-        }
-      });
-      src.on('featuresloaderror', (e)=> logErr('lt_c_uq111 load error', 'Load failed'));
-      uqLayer = new ol.layer.Vector({
-        source: src,
-        style: new ol.style.Style({ stroke:new ol.style.Stroke({color:[239,68,68,0.95], width:2}) }),
-        zIndex: 250
-      });
-      map.addLayer(uqLayer);
-    }
-    $('#uqToggle').addEventListener('change', (e)=>{
-      if(!uqLayer && e.target.checked){ addUqLayer(); }
-      if(uqLayer) uqLayer.setVisible(e.target.checked);
-    });
-
-    // WMS URL 버튼(현재 뷰 기준)
-    let lastWmsUrl = '';
-    $('#showWmsUrl').addEventListener('click', ()=>{
-      lastWmsUrl = buildWmsUrl(map, { crs:'EPSG:900913' });
-      const okCopy = ()=> navigator.clipboard.writeText(lastWmsUrl).catch(()=>{});
-      alert('WMS URL이 콘솔에 출력되었습니다.\n복사도 시도합니다.');
-      console.log('[WMS URL]', lastWmsUrl);
-      okCopy();
-    });
-    map.on('moveend', ()=>{
-      lastWmsUrl = buildWmsUrl(map, { crs:'EPSG:900913' });
-    });
-
-    // 현재 위치
-    function autoLocate(){
+    let located=false;
+    function autoLocate(fly=false){
       const isSecure = location.protocol==='https:' || ['localhost','127.0.0.1','::1'].includes(location.hostname);
       if(!isSecure || !navigator.geolocation){
-        warn('위치 권한/환경 확인 필요'); logWarn('geolocation unsupported or insecure origin', location.origin); return;
+        warn('위치 권한/환경 문제(https 필요)'); return;
       }
-      let done=false;
       const opts={ enableHighAccuracy:true, maximumAge:5000, timeout:9000 };
-      const apply=(lng,lat)=>{ if(done) return; done=true; setMeAndSeed(lng,lat,'현재 위치 기준'); };
-      const wid=navigator.geolocation.watchPosition(
-        p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },
-        err=>{ logErr('watchPosition error', `${err.code} ${err.message}`); },
-        opts
-      );
+      const apply=(lng,lat)=>{ if(located) return; located=true; setMeAndSeed(lng,lat,'현재 위치 기준'); if(fly){ map.getView().animate({center:ol.proj.fromLonLat([lng,lat]), zoom:15, duration:400}); } };
       navigator.geolocation.getCurrentPosition(
-        p=>{ apply(p.coords.longitude,p.coords.latitude); navigator.geolocation.clearWatch(wid); },
-        err=>{ logErr('getCurrentPosition error', `${err.code} ${err.message}`); warn('위치 실패 · 버튼으로 다시 시도하세요'); },
+        p=>{ apply(p.coords.longitude,p.coords.latitude); },
+        err=>{ logErr('geolocation 실패', `${err.code} ${err.message}`); },
         opts
       );
     }
-    $('#locBtn').addEventListener('click', autoLocate);
+    $('#locBtn').addEventListener('click', ()=> autoLocate(true));
 
-    // 초기: 위치대기(김천 기본 제거), 지적 토글 ON이면 레이어 준비
-    if($('#uqToggle').checked){ addUqLayer(); }
-    autoLocate();
+    // 시작: 자동 위치 시도 (김천 고정 제거)
+    autoLocate(false);
+
+    // 초기 범위에서 WFS 먼저 시도(타일 에러 없이도 사용 가능)
+    activateWFS();
   }
 
-  window.OL_READY.then((src)=>{ console.info('[INFO] OpenLayers loaded', src); startApp(); })
-  .catch(err=>{
-    const msg = 'OpenLayers 10.6.1 로딩 실패 (로컬+CDN 모두 실패)';
-    warn(msg);
-    logErr(msg, (err && (err.stack||err.message)) || String(err));
+  function domReady(cb){ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', cb); else cb(); }
+  window.OL_READY.then(()=> domReady(()=> startApp())).catch(err=>{
+    logErr('OpenLayers 로딩 실패', (err && (err.stack||err.message)) || String(err));
   });
 })();
 </script>
