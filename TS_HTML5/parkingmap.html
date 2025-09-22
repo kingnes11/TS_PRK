@@ -225,7 +225,7 @@ function osmXYZ(){
   const v = encodeURIComponent(BUILD_TAG);
   return new ol.layer.Tile({
     source:new ol.source.XYZ({
-      url: `https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png?v=${v}`,
+      url: `https://{a-c}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
       crossOrigin:'anonymous',
       attributions:'&copy; OpenStreetMap'
     }),
