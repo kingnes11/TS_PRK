@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2열) · 에러로그(URL)</title>
+<title>행정구역도(WFS JSONP 4종) + VWorld WMTS + 더미10 · 하단리스트(2행만 보이기) · 에러로그(URL)</title>
 
 <!-- OpenLayers -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css">
@@ -19,19 +19,18 @@
     position:fixed; left:12px; right:12px; bottom:12px; z-index:30;
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:10px 10px 12px;
     box-shadow:0 10px 30px rgba(0,0,0,.35); display:flex; flex-direction:column; gap:8px;
-    max-height:40vh;  /* 스크롤 영역 확보 */
   }
   .row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
   .title{font-weight:800}
   .muted{color:var(--muted)}
   .btn{border:1px solid var(--border); background:transparent; color:#c7d2fe; border-radius:10px; padding:8px 12px; font-weight:700; cursor:pointer}
 
-  /* 2열 그리드 카드 + 스크롤 */
+  /* 2열 그리드 카드 + 스크롤(높이는 JS로 ‘2행’만 보이도록 동적 제한) */
   .list{overflow:auto; border:1px solid var(--border); border-radius:12px; background:#0c1530; padding:8px}
   .grid{display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px}
   .card{
     padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:#0e1a39; cursor:pointer;
-    display:grid; gap:4px;
+    display:grid; gap:4px; min-height:66px; /* 대략적 기준 높이(실제는 JS로 측정) */
   }
   .card:hover{background:#122147}
   .nm{font-weight:700}
@@ -54,7 +53,7 @@
 
   /* 반응형 */
   @media (max-width:480px){
-    .bottom{ left:8px; right:8px; bottom:8px; max-height:45vh }
+    .bottom{ left:8px; right:8px; bottom:8px; }
     .errdock{ left:8px; right:8px; width:auto }
   }
 </style>
@@ -72,7 +71,7 @@
     <button class="btn" id="locBtn">현재 위치</button>
     <button class="btn" id="fitBtn">전체 보기</button>
   </div>
-  <div class="list">
+  <div class="list" id="listWrap">
     <div id="list" class="grid" role="listbox" aria-label="주차장 목록(더미 10)"></div>
   </div>
 </section>
@@ -247,15 +246,17 @@
   }
 
   const rowsState = { rows:[], byId:new Map() };
+
   function rebuildListRows(rows){
     rowsState.rows = rows; rowsState.byId.clear(); rows.forEach(r=>rowsState.byId.set(r.id,r));
-    const wrap=$('#list');
-    wrap.innerHTML = rows.map((r,i)=>`
+    const grid=$('#list');
+    grid.innerHTML = rows.map((r,i)=>`
       <div class="card" data-id="${r.id}">
         <div class="nm">${i+1}. ${r.nm}</div>
         <div class="sub"><span class="badge">${r.dist.toFixed(2)} km</span> <span>${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</span></div>
       </div>`).join('');
-    wrap.querySelectorAll('.card').forEach(el=>{
+
+    grid.querySelectorAll('.card').forEach(el=>{
       el.addEventListener('click', ()=>{
         const r = rowsState.byId.get(el.dataset.id); if(!r) return;
         const c = ol.proj.fromLonLat([r.lng,r.lat]);
@@ -263,6 +264,28 @@
         openPopup({title:r.nm, desc:`좌표: ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)} · 거리 ${r.dist.toFixed(2)} km`}, c);
       });
     });
+
+    // ▶ 리스트 높이: 카드 2행만 보이도록 동적 제한
+    adjustListHeight();
+  }
+
+  function adjustListHeight(){
+    const grid = $('#list');
+    const wrap = $('#listWrap');
+    const first = grid.querySelector('.card');
+    if(!first){ wrap.style.maxHeight = '0px'; placeErrdock(); return; }
+
+    // 카드 실제 높이 + 그리드 행 간격 계산
+    const cardH = first.getBoundingClientRect().height;
+    const gap = parseFloat(getComputedStyle(grid).gap) || 8;
+    const visibleRows = 2;
+    const padding = 8*2; // .list padding 8px 상하
+    const maxH = cardH * visibleRows + gap * (visibleRows - 1) + padding;
+
+    wrap.style.maxHeight = Math.ceil(maxH) + 'px';
+
+    // 오류창 위치도 재보정
+    placeErrdock();
   }
 
   function setDummyOn(lng,lat){
@@ -347,19 +370,27 @@
     const ex=ol.extent.createEmpty();
     meSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
     prkSrc.getFeatures().forEach(f=> ol.extent.extend(ex,f.getGeometry().getExtent()));
-    if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,180,20], maxZoom:17}); // 하단패널 높이 고려하여 padding bottom
+    if(!ol.extent.isEmpty(ex)) view.fit(ex,{duration:350, padding:[20,20,calcBottomPad(),20], maxZoom:17});
   };
 
-  // 오류창이 하단 리스트와 겹치지 않도록 자동 보정
+  // === 하단 리스트 높이와 오류창이 겹치지 않도록 자동 보정 ===
   const errdock = $('#errdock');
+  function calcBottomPad(){
+    // fit() padding bottom: 하단 패널 높이 + 여백
+    const b = $('#bottom');
+    return Math.ceil(b.getBoundingClientRect().height + 20);
+  }
   function placeErrdock(){
     const b = $('#bottom');
-    const h = b.getBoundingClientRect().height; // 현재 하단 패널 높이
+    const h = b.getBoundingClientRect().height;
     errdock.style.bottom = (h + 12) + 'px';
   }
-  new ResizeObserver(placeErrdock).observe($('#bottom'));
-  window.addEventListener('resize', placeErrdock);
-  placeErrdock();
+
+  // 리사이징/회전 시 리스트 2행 유지 + 오류창 위치 보정
+  const ro = new ResizeObserver(()=>{ adjustListHeight(); placeErrdock(); });
+  ro.observe($('#bottom'));
+  window.addEventListener('resize', ()=>{ adjustListHeight(); placeErrdock(); });
+  window.addEventListener('orientationchange', ()=>{ setTimeout(()=>{ adjustListHeight(); placeErrdock(); }, 200); });
 
   // 부팅
   locate(true);
