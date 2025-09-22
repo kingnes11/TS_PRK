@@ -32,12 +32,12 @@ const BUILD_TAG = (new URLSearchParams(location.search)).get('v') || String(Date
 (function(){
   const v = encodeURIComponent(BUILD_TAG);
   const cssSrcs = [
-    `https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css?v=${v}`,
-    `https://unpkg.com/ol@10.6.1/ol.css?v=${v}`
+    `https://cdn.jsdelivr.net/npm/ol@10.6.1/ol.css`,
+    `https://unpkg.com/ol@10.6.1/ol.css`
   ];
   const jsSrcs = [
-    `https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js?v=${v}`,
-    `https://unpkg.com/ol@10.6.1/dist/ol.js?v=${v}`
+    `https://cdn.jsdelivr.net/npm/ol@10.6.1/dist/ol.js`,
+    `https://unpkg.com/ol@10.6.1/dist/ol.js`
   ];
   function loadCSS(list, i=0){
     if(i>=list.length) return;
