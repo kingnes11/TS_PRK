@@ -158,6 +158,7 @@
       map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
 
       let followMode = true; // 현재 위치 따라가기
+      let didCenter = false; // ✅ 최초 1회 자동 이동 보장
       kakao.maps.event.addListener(map, 'dragstart', ()=>{ followMode=false; });
       kakao.maps.event.addListener(map, 'zoom_start', ()=>{ followMode=false; });
       $('#locBtn').onclick=()=>{ followMode=true; recenterToMe(true); };
@@ -308,7 +309,7 @@
         wrap.style.maxHeight = Math.ceil(maxH) + 'px';
       }
 
-      // ===== 현재 위치: 로딩 후 자동 이동 (요구사항) =====
+      // ===== 현재 위치: 로딩 후 자동 이동 보장 =====
       function inKorea(lng, lat){ return lng>124 && lng<132 && lat>32 && lat<39; }
       function coerceLngLat(rawLng, rawLat){
         let lng = Number(rawLng), lat = Number(rawLat);
@@ -317,7 +318,6 @@
         return { lng, lat };
       }
       function locateWatch(){
-        // HTTPS 또는 로컬에서만
         const host = location.hostname;
         const isLocal = host==='localhost'||host==='127.0.0.1'||host==='::1'||/^192\.168\.\d+\.\d+$/.test(host)||/\.local$/.test(host);
         const httpsOk = location.protocol==='https:' || isLocal;
@@ -331,9 +331,10 @@
             radCircle.setRadius(radiusState.rKm*1000);
             setDummyOnce(f.lat, f.lng);
 
-            /* ✅ 추가: 맵 로딩 후 첫 좌표에서 자동으로 현재 위치로 이동 */
+            /* ✅ 최초 좌표 수신 시 자동 이동(버튼 효과 동일) */
             followMode = true;
             recenterToMe(true);
+            didCenter = true;
 
             ok(`위치 확인 · ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}`);
             startWatch();
@@ -353,6 +354,14 @@
           p=>{
             const f = coerceLngLat(p.coords.longitude, p.coords.latitude);
             updateMe(f.lat, f.lng, p.coords.accuracy||0);
+
+            /* ✅ 혹시 getCurrentPosition이 지연/타임아웃된 환경에서도 1회 자동 이동 보장 */
+            if(!didCenter){
+              followMode = true;
+              recenterToMe(true);
+              didCenter = true;
+            }
+
             if(followMode) recenterToMe(true);
             applyRadiusFilter(); rebuildList();
           },
@@ -365,7 +374,7 @@
       ok('Kakao 지도 준비 완료');
     }
 
-    // autoload=false → SDK 준비 후 실행
+    // autoload=false → SDK 준비 후 실행 (오류 로그 로직 유지)
     function waitAndLoad(){
       let tried = 0;
       const t = setInterval(() => {
