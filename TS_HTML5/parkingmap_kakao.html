@@ -195,10 +195,24 @@
         accCircle.setPosition(ll); accCircle.setRadius(Math.max(0, acc||0));
         radCircle.setPosition(ll);
       }
-      function recenterToMe(animate=true){
+      function recenterToMe(animate = true){
         if(!meState.latlng) return;
-        if(animate) map.panTo(meState.latlng); else map.setCenter(meState.latlng);
+
+        // 1) 먼저 원하는 줌으로 맞추고
         if(map.getLevel() > 5) map.setLevel(5);
+
+        // 2) 바로 한 번 setCenter로 박고
+        map.setCenter(meState.latlng);
+
+        // 3) 지도 상태가 안정된 뒤 한 번 더 panTo로 마무리(시각적 부드러움)
+        if (animate) {
+          const once = kakao.maps.event.addListener(map, 'idle', function(){
+            kakao.maps.event.removeListener(map, 'idle', once);
+            map.panTo(meState.latlng);
+          });
+          // idle이 안 오더라도 안전하게 한 번 더 시도
+          setTimeout(()=> map.panTo(meState.latlng), 120);
+        }
       }
 
       // ===== 반경/목록 =====
