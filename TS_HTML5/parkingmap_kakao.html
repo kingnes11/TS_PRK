@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>카카오맵: 초기/버튼만 현위치 자동 이동, 화면 이동 시 복귀 없음</title>
+<title>카카오맵: 로드/버튼에서만 현위치 이동</title>
 
 <!-- Kakao Maps JS (HTTPS + autoload=false) -->
 <script
@@ -41,7 +41,6 @@
   .bottom.min .minbtn::after{ content:'펼치기' }
   .bottom .minbtn::after{ content:'접기' }
 
-  /* 오류 로그(유지) */
   .errdock{ position:fixed; right:12px; z-index:1000; width:min(560px,calc(100% - 24px)); background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
   .errdock .hdr{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border) }
   .errdock .title{ font-weight:800 }
@@ -70,7 +69,7 @@
     <button class="btn min minbtn" id="minList"></button>
   </div>
   <div class="row">
-    <button class="btn" id="locBtn" title="현위치로 이동(추적 재개)">현재 위치</button>
+    <button class="btn" id="locBtn" title="현위치로 이동(1회)">현재 위치</button>
     <button class="btn" id="fitBtn" title="반경 내 전체 보기">전체 보기</button>
     <div class="chipbar" id="radiusBar" style="margin-left:auto">
       <div class="chip" data-r="0.5">0.5km</div>
@@ -95,7 +94,7 @@
 </section>
 
 <script defer>
-  /* ===== 유틸 & 오류 로그(유지) ===== */
+  /* ===== 유틸 & 오류 로그 ===== */
   const $ = (s)=>document.querySelector(s);
   const ok   = (m)=> $('#stat').innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
   const warn = (m)=> $('#stat').innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
@@ -131,28 +130,49 @@
       const map = new kakao.maps.Map(mapEl, { center: new kakao.maps.LatLng(36.4,127.5), level: 12, draggable: true });
       map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
 
-      // === 추적 상태 ===
-      let followMode = true;   // 초기/“현재 위치” 버튼에서만 ON
-      let didCenter  = false;  // 최초 1회 자동 이동 완료 여부
-
-      // ✅ 코드로 지도 이동 중임을 표시하는 플래그
+      // === 프로그램 이동 가드 ===
       let programmaticMove = false;
       function runAsProgrammatic(fn){
         programmaticMove = true;
         try { fn(); } finally { setTimeout(()=>{ programmaticMove = false; }, 0); }
       }
 
-      // 사용자가 지도를 움직이면(어떤 방식이든) → 즉시 추적 OFF
-      kakao.maps.event.addListener(map, 'drag',           ()=>{ if(!programmaticMove) followMode = false; });
-      kakao.maps.event.addListener(map, 'dragstart',      ()=>{ if(!programmaticMove) followMode = false; });
-      kakao.maps.event.addListener(map, 'zoom_start',     ()=>{ if(!programmaticMove) followMode = false; });
-      kakao.maps.event.addListener(map, 'center_changed', ()=>{ if(!programmaticMove) followMode = false; });
-      kakao.maps.event.addListener(map, 'bounds_changed', ()=>{ if(!programmaticMove) followMode = false; });
+      // ✅ 재중심 예약( idle/panTo 백업 ) 관리 & 취소
+      let centerJob = { idle: null, to: null };
+      function cancelCenterJob(){
+        if (centerJob.idle) {
+          kakao.maps.event.removeListener(map, 'idle', centerJob.idle);
+          centerJob.idle = null;
+        }
+        if (centerJob.to) {
+          clearTimeout(centerJob.to);
+          centerJob.to = null;
+        }
+      }
 
-      // 버튼: 현재 위치 → 추적 ON + 즉시 현위치로 이동(프로그램 이동)
-      $('#locBtn').onclick = ()=>{ followMode = true; recenterToMe(true); };
-      // 버튼: 전체 보기 → 사용자 의도 이동이므로 추적 OFF
-      $('#fitBtn').onclick = ()=>{ followMode = false; fitBounds(); };
+      // 사용자 조작 시: 예약만 즉시 취소(자동 복귀 자체가 없음)
+      function userMoved(){
+        if(!programmaticMove){
+          cancelCenterJob();
+        }
+      }
+      kakao.maps.event.addListener(map, 'drag',           userMoved);
+      kakao.maps.event.addListener(map, 'dragstart',      userMoved);
+      kakao.maps.event.addListener(map, 'dragend',        userMoved);
+      kakao.maps.event.addListener(map, 'zoom_start',     userMoved);
+      kakao.maps.event.addListener(map, 'center_changed', userMoved);
+      kakao.maps.event.addListener(map, 'bounds_changed', userMoved);
+
+      // 버튼: 현재 위치 → 1회만 재중심
+      $('#locBtn').onclick = ()=>{
+        cancelCenterJob();
+        recenterToMe(true); // one-shot
+      };
+      // 버튼: 전체 보기
+      $('#fitBtn').onclick = ()=>{
+        cancelCenterJob();
+        runAsProgrammatic(()=> fitBounds());
+      };
 
       // === 내 위치 표시 요소 ===
       const meState = { latlng:null, acc:0 };
@@ -186,18 +206,23 @@
         radCircle.setPosition(ll);
       }
 
-      // 안정화된 재중심(줌→센터→idle 후 panTo + 백업) — 프로그램 이동으로 감싼다
+      // 안정화된 재중심(줌→센터→idle 후 panTo + 백업) — 항상 "한 세트만" 예약
       function recenterToMe(animate = true){
         if(!meState.latlng) return;
+        cancelCenterJob(); // 새 예약 전 기존 예약 정리
         runAsProgrammatic(()=>{
           if(map.getLevel() > 5) map.setLevel(5);
           map.setCenter(meState.latlng);
           if (animate) {
-            const once = kakao.maps.event.addListener(map, 'idle', function(){
-              kakao.maps.event.removeListener(map, 'idle', once);
-              map.panTo(meState.latlng);
+            centerJob.idle = kakao.maps.event.addListener(map, 'idle', function(){
+              kakao.maps.event.removeListener(map, 'idle', centerJob.idle);
+              centerJob.idle = null;
+              runAsProgrammatic(()=> map.panTo(meState.latlng));
             });
-            setTimeout(()=> map.panTo(meState.latlng), 120);
+            centerJob.to = setTimeout(()=>{
+              centerJob.to = null;
+              runAsProgrammatic(()=> map.panTo(meState.latlng));
+            }, 120);
           }
         });
       }
@@ -244,7 +269,7 @@
             </div>
           </div>`);
         info.open(map, marker);
-        followMode = false; // 인포 보는 동안 자동 추적 해제
+        cancelCenterJob();
       }
       kakao.maps.event.addListener(map, 'click', ()=>{ info.close(); });
 
@@ -272,7 +297,7 @@
           prkMarkers.push({ marker:mk, lat:r.lat, lng:r.lng, meta:r });
           kakao.maps.event.addListener(mk, 'click', ()=>{
             openInfo(mk, r);
-            followMode = false; // 사용자 의도 이동: 추적 OFF
+            cancelCenterJob();
             runAsProgrammatic(()=> map.panTo(new kakao.maps.LatLng(r.lat,r.lng)));
           });
         });
@@ -317,7 +342,7 @@
             const obj = prkMarkers.find(x=>x.meta.id===id);
             if(!obj) return;
             openInfo(obj.marker, obj.meta);
-            followMode = false; // 리스트 선택도 사용자 의도 → 추적 OFF
+            cancelCenterJob();
             runAsProgrammatic(()=> map.panTo(new kakao.maps.LatLng(obj.lat,obj.lng)));
           });
         });
@@ -349,7 +374,7 @@
         }
       }
 
-      // === 현재 위치: 초기/버튼만 자동 이동, 화면 이동 시 복귀 없음 ===
+      // === 현재 위치: 로드/버튼에서만 1회 이동 ===
       function inKorea(lng, lat){ return lng>124 && lng<132 && lat>32 && lat<39; }
       function coerceLngLat(rawLng, rawLat){
         let lng = Number(rawLng), lat = Number(rawLat);
@@ -357,6 +382,9 @@
         if(looksSwapped){ const t=lng; lng=lat; lat=t; }
         return { lng, lat };
       }
+
+      let didCenterOnce = false; // 맵 로드 후 1회만 재중심
+
       function locateWatch(){
         const host = location.hostname;
         const isLocal = host==='localhost'||host==='127.0.0.1'||host==='::1'||/^192\.168\.\d+\.\d+$/.test(host)||/\.local$/.test(host);
@@ -371,10 +399,12 @@
             radCircle.setRadius(radiusState.rKm*1000);
             setDummyOnce(f.lat, f.lng);
 
-            // 초기 1회 자동 이동 + 추적 ON
-            followMode = true;
-            recenterToMe(true);
-            didCenter = true;
+            // ✅ 초기 로딩 시 1회만 지도 중심 이동
+            if(!didCenterOnce){
+              cancelCenterJob();
+              recenterToMe(true);
+              didCenterOnce = true;
+            }
 
             ok(`위치 확인 · ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}`);
             startWatch();
@@ -389,32 +419,21 @@
           { enableHighAccuracy:true, maximumAge:0, timeout:8000 }
         );
       }
+
+      // 위치 변경 모니터링: 지도 중심은 바꾸지 않음(요구사항)
       function startWatch(){
         navigator.geolocation.watchPosition(
           p=>{
             const f = coerceLngLat(p.coords.longitude, p.coords.latitude);
             updateMe(f.lat, f.lng, p.coords.accuracy||0);
-
-            // getCurrentPosition이 지연된 환경 보강: 최초 1회만 자동 이동
-            if(!didCenter){
-              followMode = true;
-              recenterToMe(true);
-              didCenter = true;
-            }
-
-            // ✅ 팔로우 ON일 때만, 그리고 이것도 '프로그램 이동'으로만 처리
-            if (followMode) {
-              recenterToMe(true);
-            }
-
-            applyRadiusFilter(); rebuildList();
+            applyRadiusFilter(); rebuildList(); // 목록/반경만 갱신
           },
           ()=>{},
           { enableHighAccuracy:true, maximumAge:2000, timeout:10000 }
         );
       }
-      locateWatch();
 
+      locateWatch();
       ok('Kakao 지도 준비 완료');
     }
 
