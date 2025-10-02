@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>카카오맵: 자동 현위치 + 사용자 조작 시 일시정지</title>
+<title>카카오맵: 초기/버튼만 현위치 자동 이동, 화면 이동 시 복귀 없음</title>
 
-<!-- Kakao Maps JS -->
+<!-- Kakao Maps JS (HTTPS + autoload=false) -->
 <script
   src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a1194f70f6ecf2ece7a703a4a07a0876&libraries=services&autoload=false"
   defer
@@ -41,7 +41,7 @@
   .bottom.min .minbtn::after{ content:'펼치기' }
   .bottom .minbtn::after{ content:'접기' }
 
-  /* 오류 로그(그대로) */
+  /* 오류 로그(유지) */
   .errdock{ position:fixed; right:12px; z-index:1000; width:min(560px,calc(100% - 24px)); background:#0f172a; border:1px solid var(--border); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
   .errdock .hdr{ display:flex; align-items:center; gap:8px; padding:8px 10px; border-bottom:1px solid var(--border) }
   .errdock .title{ font-weight:800 }
@@ -70,7 +70,7 @@
     <button class="btn min minbtn" id="minList"></button>
   </div>
   <div class="row">
-    <button class="btn" id="locBtn" title="현위치로 이동(팔로우 재개)">현재 위치</button>
+    <button class="btn" id="locBtn" title="현위치로 이동(추적 재개)">현재 위치</button>
     <button class="btn" id="fitBtn" title="반경 내 전체 보기">전체 보기</button>
     <div class="chipbar" id="radiusBar" style="margin-left:auto">
       <div class="chip" data-r="0.5">0.5km</div>
@@ -95,11 +95,10 @@
 </section>
 
 <script defer>
-  /* ===== 공용 유틸 & 오류 로그 (유지) ===== */
+  /* ===== 유틸 & 오류 로그(유지) ===== */
   const $ = (s)=>document.querySelector(s);
-  const stat = ()=>$('#stat');
-  const ok   = (m)=> stat().innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
-  const warn = (m)=> stat().innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
+  const ok   = (m)=> $('#stat').innerHTML = `<span style="color:#10b981">✔</span> ${m}`;
+  const warn = (m)=> $('#stat').innerHTML = `<span style="color:#f59e0b">!</span> ${m}`;
   const errBody=()=>$('#errbody'), errCnt=()=>$('#errcount'), errDock=()=>$('#errdock');
   window.addEventListener('error', e=> logERR('window.onerror: '+e.message,'', e.error?.stack||''));
   window.addEventListener('unhandledrejection', e=> logERR('unhandledrejection','', e.reason?.stack||String(e.reason)));
@@ -120,6 +119,7 @@
     $('#minList').onclick=()=> $('#bottom').classList.toggle('min');
   });
 
+  // Kakao SDK 로드 감시(진단)
   const sdk = document.getElementById('kakao-sdk');
   sdk?.addEventListener('error', ()=> logERR('[KAKAO] SDK load failed','https://dapi.kakao.com/v2/maps/sdk.js'));
   sdk?.addEventListener('load',  ()=> console.log('[KAKAO] SDK loaded'));
@@ -131,27 +131,52 @@
       const map = new kakao.maps.Map(mapEl, { center: new kakao.maps.LatLng(36.4,127.5), level: 12, draggable: true });
       map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
 
-      // === 팔로우 상태 & 일시정지 타이머 ===
-      let followMode = true;        // 현위치 추적 on/off
-      let didCenter  = false;       // 최초 1회 자동 이동 완료 여부
-      let followSuspendUntil = 0;   // 사용자 조작/마커 클릭 후 일시정지 마감 시각(ms)
-      let infoOpen   = false;       // 인포윈도우 열림 여부
-      const now = ()=>Date.now();
-      const isFollowSuspended = ()=> now() < followSuspendUntil || infoOpen;
-      const suspendFollow = (ms=6000)=>{ followSuspendUntil = now() + ms; };
+      // === 추적 상태 ===
+      let followMode = true;   // 초기/“현재 위치” 버튼에서만 ON
+      let didCenter  = false;  // 최초 1회 자동 이동 완료 여부
 
-      // 사용자 조작 시 팔로우 일시정지
-      kakao.maps.event.addListener(map, 'dragstart', ()=> suspendFollow(8000));
-      kakao.maps.event.addListener(map, 'zoom_start', ()=> suspendFollow(8000));
-      $('#fitBtn').onclick = ()=>{ suspendFollow(6000); fitBounds(); };
-      $('#locBtn').onclick = ()=>{ followMode = true; followSuspendUntil = 0; infoOpen=false; recenterToMe(true); };
+      // ✅ 코드로 지도 이동 중임을 표시하는 플래그
+      let programmaticMove = false;
+      function runAsProgrammatic(fn){
+        programmaticMove = true;
+        try { fn(); } finally { setTimeout(()=>{ programmaticMove = false; }, 0); }
+      }
 
-      // === 현위치 마커/원/반경 ===
+      // 사용자가 지도를 움직이면(어떤 방식이든) → 즉시 추적 OFF
+      kakao.maps.event.addListener(map, 'drag',           ()=>{ if(!programmaticMove) followMode = false; });
+      kakao.maps.event.addListener(map, 'dragstart',      ()=>{ if(!programmaticMove) followMode = false; });
+      kakao.maps.event.addListener(map, 'zoom_start',     ()=>{ if(!programmaticMove) followMode = false; });
+      kakao.maps.event.addListener(map, 'center_changed', ()=>{ if(!programmaticMove) followMode = false; });
+      kakao.maps.event.addListener(map, 'bounds_changed', ()=>{ if(!programmaticMove) followMode = false; });
+
+      // 버튼: 현재 위치 → 추적 ON + 즉시 현위치로 이동(프로그램 이동)
+      $('#locBtn').onclick = ()=>{ followMode = true; recenterToMe(true); };
+      // 버튼: 전체 보기 → 사용자 의도 이동이므로 추적 OFF
+      $('#fitBtn').onclick = ()=>{ followMode = false; fitBounds(); };
+
+      // === 내 위치 표시 요소 ===
       const meState = { latlng:null, acc:0 };
-      const ME_SVG = `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs><path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/><circle cx='19' cy='12' r='5' fill='#fff'/><path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/></svg>`);
-      const meMarker = new kakao.maps.Marker({ map, position: new kakao.maps.LatLng(36.4,127.5), image: new kakao.maps.MarkerImage(ME_SVG, new kakao.maps.Size(38,38), {offset:new kakao.maps.Point(19,38)}) });
-      const accCircle = new kakao.maps.Circle({ map, center: new kakao.maps.LatLng(36.4,127.5), radius: 0, strokeWeight: 2, strokeColor: '#0ea5e9', strokeOpacity: 0.8, fillColor: '#0ea5e9', fillOpacity: 0.12 });
-      const radCircle = new kakao.maps.Circle({ map, center: new kakao.maps.LatLng(36.4,127.5), radius: 1000, strokeWeight: 2, strokeColor: '#2563eb', strokeOpacity: 0.9, strokeStyle: 'dash', fillColor: '#2563eb', fillOpacity: 0.06 });
+      const ME_SVG = `data:image/svg+xml;utf8,`+encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' width='38' height='38' viewBox='0 0 38 38'>
+          <defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#0ea5e9'/><stop offset='1' stop-color='#2563eb'/></linearGradient></defs>
+          <path d='M19 0c9 0 16 7 16 16 0 9-8 17-16 22-8-5-16-13-16-22C3 7 10 0 19 0z' fill='url(#g)'/>
+          <circle cx='19' cy='12' r='5' fill='#fff'/>
+          <path d='M10 26c2-5 6-7 9-7s7 2 9 7' stroke='#fff' stroke-width='3' fill='none' stroke-linecap='round'/>
+        </svg>`
+      );
+      const meMarker = new kakao.maps.Marker({
+        map, position: new kakao.maps.LatLng(36.4,127.5),
+        image: new kakao.maps.MarkerImage(ME_SVG, new kakao.maps.Size(38,38), {offset:new kakao.maps.Point(19,38)})
+      });
+      const accCircle = new kakao.maps.Circle({
+        map, center: new kakao.maps.LatLng(36.4,127.5), radius: 0,
+        strokeWeight: 2, strokeColor: '#0ea5e9', strokeOpacity: 0.8, fillColor: '#0ea5e9', fillOpacity: 0.12
+      });
+      const radCircle = new kakao.maps.Circle({
+        map, center: new kakao.maps.LatLng(36.4,127.5), radius: 1000,
+        strokeWeight: 2, strokeColor: '#2563eb', strokeOpacity: 0.9, strokeStyle: 'dash',
+        fillColor: '#2563eb', fillOpacity: 0.06
+      });
 
       function updateMe(lat, lng, acc){
         const ll = new kakao.maps.LatLng(lat, lng);
@@ -161,21 +186,23 @@
         radCircle.setPosition(ll);
       }
 
-      // 강제 고정: 레벨→센터→idle 뒤 panTo (+백업)
+      // 안정화된 재중심(줌→센터→idle 후 panTo + 백업) — 프로그램 이동으로 감싼다
       function recenterToMe(animate = true){
         if(!meState.latlng) return;
-        if(map.getLevel() > 5) map.setLevel(5);
-        map.setCenter(meState.latlng);
-        if (animate) {
-          const once = kakao.maps.event.addListener(map, 'idle', function(){
-            kakao.maps.event.removeListener(map, 'idle', once);
-            map.panTo(meState.latlng);
-          });
-          setTimeout(()=> map.panTo(meState.latlng), 120);
-        }
+        runAsProgrammatic(()=>{
+          if(map.getLevel() > 5) map.setLevel(5);
+          map.setCenter(meState.latlng);
+          if (animate) {
+            const once = kakao.maps.event.addListener(map, 'idle', function(){
+              kakao.maps.event.removeListener(map, 'idle', once);
+              map.panTo(meState.latlng);
+            });
+            setTimeout(()=> map.panTo(meState.latlng), 120);
+          }
+        });
       }
 
-      // 반경/목록 (유지)
+      // === 반경/목록 ===
       const radiusState = { rKm: 1 };
       $('#rLbl').textContent = radiusState.rKm.toFixed(1);
       $('#radiusBar').addEventListener('click', (e)=>{
@@ -188,42 +215,54 @@
         applyRadiusFilter(); rebuildList();
       });
 
-      function haversineKm(a,b){ const R=6371,toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng); const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2); const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2; return 2*R*Math.asin(Math.sqrt(t)); }
-
-      const P_SVG = `data:image/svg+xml;utf8,`+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 36 36'><circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text></svg>`);
-      const prkImage = new kakao.maps.MarkerImage(P_SVG, new kakao.maps.Size(34,34), {offset:new kakao.maps.Point(17,17)});
-      const prkMarkers = [];
-
-      function genDummy(lng,lat,n=10,rKm=2.5){
-        const types=['노상','노외','부설']; const owners=['공영','민영']; const out=[];
-        for(let i=0;i<n;i++){
-          const ang=Math.random()*Math.PI*2, r=Math.random()*rKm;
-          const dy=(r/111)*Math.sin(ang), dx=(r/(111*Math.cos(lat*Math.PI/180)))*Math.cos(ang);
-          out.push({ id:`DM-${i+1}`, nm:`더미 주차장 ${i+1}`, type: types[i%types.length], owner: owners[i%owners.length],
-            cap:{ total: 20+(i*3)%80, disabled:(i*2)%6, compact:(i*3)%10, ev:(i*4)%8, pregnant:(i*5)%5 },
-            hour:'연중무휴 24시간', fee: (i%2?'유료(30분 1000원)':'무료'),
-            lng: lng+dx, lat: lat+dy });
-        }
-        return out;
+      function haversineKm(a,b){
+        const R=6371,toRad=d=>d*Math.PI/180;
+        const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+        const s1=Math.sin(dLat/2), s2=Math.sin(dLng/2);
+        const t=s1*s1+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*s2*s2;
+        return 2*R*Math.asin(Math.sqrt(t));
       }
 
+      const P_SVG = `data:image/svg+xml;utf8,`+encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34' viewBox='0 0 36 36'>
+          <circle cx='18' cy='18' r='16' fill='#2563eb'/><text x='18' y='22' font-family='Arial,Helvetica,sans-serif' font-size='16' text-anchor='middle' fill='#fff' font-weight='700'>P</text>
+        </svg>`
+      );
+      const prkImage = new kakao.maps.MarkerImage(P_SVG, new kakao.maps.Size(34,34), {offset:new kakao.maps.Point(17,17)});
+      const prkMarkers = [];
       const info = new kakao.maps.InfoWindow({ removable:true });
+
       function openInfo(marker, meta){
         info.setContent(`
           <div style="min-width:240px;padding:8px 10px">
             <div style="font-weight:800;margin-bottom:6px">${meta.nm||'주차장'}</div>
             <div style="color:#374151;font-size:.9rem;line-height:1.35">
               형태: ${meta.type||'-'} · 구분: ${meta.owner||'-'}<br>
-              총면수: ${meta.cap?.total??0} (장애 ${meta.cap?.disabled??0}, 경차 ${meta.cap?.compact??0}, 친환경 ${meta.cap?.ev??0}, 임산부 ${meta.cap?.pregnant??0})<br>
+              총면수: ${meta.cap?.total??0} (장애 ${meta.cap?.disabled??0}, 경차 ${meta.cap?.compact??0}, EV ${meta.cap?.ev??0}, 임산부 ${meta.cap?.pregnant??0})<br>
               운영시간: ${meta.hour||'-'}<br>
               요금: ${meta.fee||'-'}
             </div>
           </div>`);
         info.open(map, marker);
-        infoOpen = true;            // 인포 열림 동안 팔로우 정지
-        suspendFollow(8000);        // 사용자가 읽는 동안 8초 일시정지
+        followMode = false; // 인포 보는 동안 자동 추적 해제
       }
-      kakao.maps.event.addListener(map, 'click', ()=>{ info.close(); infoOpen=false; });
+      kakao.maps.event.addListener(map, 'click', ()=>{ info.close(); });
+
+      function genDummy(lng,lat,n=10,rKm=2.5){
+        const types=['노상','노외','부설']; const owners=['공영','민영']; const out=[];
+        for(let i=0;i<n;i++){
+          const ang=Math.random()*Math.PI*2, r=Math.random()*rKm;
+          const dy=(r/111)*Math.sin(ang), dx=(r/(111*Math.cos(lat*Math.PI/180)))*Math.cos(ang);
+          out.push({
+            id:`DM-${i+1}`, nm:`더미 주차장 ${i+1}`,
+            type: types[i%types.length], owner: owners[i%owners.length],
+            cap:{ total: 20+(i*3)%80, disabled:(i*2)%6, compact:(i*3)%10, ev:(i*4)%8, pregnant:(i*5)%5 },
+            hour:'연중무휴 24시간', fee: (i%2?'유료(30분 1000원)':'무료'),
+            lng: lng+dx, lat: lat+dy
+          });
+        }
+        return out;
+      }
 
       function setDummyOnce(lat,lng){
         if(prkMarkers.length) return;
@@ -231,7 +270,11 @@
           const mk = new kakao.maps.Marker({ map, position: new kakao.maps.LatLng(r.lat,r.lng), image: prkImage });
           mk._meta = r;
           prkMarkers.push({ marker:mk, lat:r.lat, lng:r.lng, meta:r });
-          kakao.maps.event.addListener(mk, 'click', ()=>{ openInfo(mk, r); map.panTo(new kakao.maps.LatLng(r.lat,r.lng)); });
+          kakao.maps.event.addListener(mk, 'click', ()=>{
+            openInfo(mk, r);
+            followMode = false; // 사용자 의도 이동: 추적 OFF
+            runAsProgrammatic(()=> map.panTo(new kakao.maps.LatLng(r.lat,r.lng)));
+          });
         });
         applyRadiusFilter(); rebuildList();
       }
@@ -267,13 +310,15 @@
             <div class="sub">총:${r.meta.cap.total} / 장애:${r.meta.cap.disabled} / 경차:${r.meta.cap.compact} / EV:${r.meta.cap.ev} / 임산부:${r.meta.cap.pregnant}</div>
           </div>
         `).join('');
+
         listEl.querySelectorAll('.card').forEach(el=>{
           el.addEventListener('click', ()=>{
             const id = el.getAttribute('data-id');
             const obj = prkMarkers.find(x=>x.meta.id===id);
             if(!obj) return;
             openInfo(obj.marker, obj.meta);
-            map.panTo(new kakao.maps.LatLng(obj.lat,obj.lng));
+            followMode = false; // 리스트 선택도 사용자 의도 → 추적 OFF
+            runAsProgrammatic(()=> map.panTo(new kakao.maps.LatLng(obj.lat,obj.lng)));
           });
         });
         adjustListHeight();
@@ -298,10 +343,13 @@
           const d = haversineKm({lat:meState.latlng.getLat(),lng:meState.latlng.getLng()}, {lat:p.lat,lng:p.lng});
           if(d <= radiusState.rKm) bounds.extend(new kakao.maps.LatLng(p.lat,p.lng));
         });
-        if(!bounds.isEmpty()) map.setBounds(bounds, 20, 20, Math.ceil($('#bottom').getBoundingClientRect().height + 20), 20);
+        if(!bounds.isEmpty()){
+          const padB = Math.ceil($('#bottom').getBoundingClientRect().height + 20);
+          runAsProgrammatic(()=> map.setBounds(bounds, 20, 20, padB, 20));
+        }
       }
 
-      // === 현재 위치: 로딩 후 자동 이동, 단 사용자 조작/인포 중에는 정지 ===
+      // === 현재 위치: 초기/버튼만 자동 이동, 화면 이동 시 복귀 없음 ===
       function inKorea(lng, lat){ return lng>124 && lng<132 && lat>32 && lat<39; }
       function coerceLngLat(rawLng, rawLat){
         let lng = Number(rawLng), lat = Number(rawLat);
@@ -323,9 +371,11 @@
             radCircle.setRadius(radiusState.rKm*1000);
             setDummyOnce(f.lat, f.lng);
 
-            // 최초 자동 이동
-            followMode = true; didCenter = true; followSuspendUntil = 0;
+            // 초기 1회 자동 이동 + 추적 ON
+            followMode = true;
             recenterToMe(true);
+            didCenter = true;
+
             ok(`위치 확인 · ${f.lat.toFixed(5)}, ${f.lng.toFixed(5)}`);
             startWatch();
           },
@@ -345,20 +395,21 @@
             const f = coerceLngLat(p.coords.longitude, p.coords.latitude);
             updateMe(f.lat, f.lng, p.coords.accuracy||0);
 
-            // getCurrentPosition이 느린 환경 보강(첫 1회)
+            // getCurrentPosition이 지연된 환경 보강: 최초 1회만 자동 이동
             if(!didCenter){
-              followMode = true; didCenter = true; followSuspendUntil = 0;
+              followMode = true;
               recenterToMe(true);
+              didCenter = true;
             }
 
-            // 팔로우 ON & 일시정지 아님 & 인포 안 열림 → 그때만 자동 재중심
-            if(followMode && !isFollowSuspended()){
+            // ✅ 팔로우 ON일 때만, 그리고 이것도 '프로그램 이동'으로만 처리
+            if (followMode) {
               recenterToMe(true);
             }
 
             applyRadiusFilter(); rebuildList();
           },
-          err=>{ /* 필요시 로그만 */ },
+          ()=>{},
           { enableHighAccuracy:true, maximumAge:2000, timeout:10000 }
         );
       }
@@ -367,6 +418,7 @@
       ok('Kakao 지도 준비 완료');
     }
 
+    // autoload=false → SDK 준비 후 실행
     function waitAndLoad(){
       let tried = 0;
       const t = setInterval(() => {
