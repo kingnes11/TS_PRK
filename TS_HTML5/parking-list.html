@@ -71,22 +71,19 @@
   }
   .tab-panels{ border:1px solid var(--border); border-radius:0 14px 14px 14px; overflow:hidden; background:var(--card) }
 
-  /* 목록 패널 내부 여백 */
   .tab-panel{ padding:10px }
   .tab-panel[hidden]{ display:none }
 
   /* ====== 리스트 뷰: 카드/테이블 ====== */
-  /* 기본값: 카드는 보이고, 테이블은 숨김 (모바일/아이패드 포함) */
   .table-wrap{ display:none }
   .cards{ display:grid }
 
-  /* 데스크톱(넓은 화면 + 마우스 포인터)에서만 테이블 보이기 */
   @media (min-width: 1100px) and (hover:hover) and (pointer:fine){
     .table-wrap{ display:block }
     .cards{ display:none }
   }
 
-  /* 테이블 (데스크톱) */
+  /* 테이블 */
   .table-wrap{ background:var(--card); border-top:1px solid var(--border) }
   table{ width:100%; border-collapse:collapse; font-size:.95rem }
   thead th{
@@ -98,7 +95,7 @@
   .num, .check { text-align:center }
   .check input{ width:18px; height:18px }
 
-  /* 카드 목록 */
+  /* 카드(모바일/아이패드) */
   .cards{ gap:10px; }
   .card{
     background:var(--card); border:1px solid var(--border); border-radius:14px; padding:12px;
@@ -109,6 +106,9 @@
     display:inline-block; font-size:.78rem; padding:4px 8px; border-radius:999px; background:var(--badge); border:1px solid var(--border)
   }
   .status.appr{ color:var(--ok) } .status.pend{ color:var(--warn) } .status.reject{ color:var(--err) }
+  /* 모바일 카드용 체크박스 라인 */
+  .card-head{ display:flex; align-items:center; gap:10px }
+  .card-check{ width:18px; height:18px }
 
   .pager{ display:flex; justify-content:center; gap:6px; flex-wrap:wrap; margin:10px 0 }
   .page-btn{ padding:8px 12px; border-radius:10px; border:1px solid var(--border); background:transparent; cursor:pointer }
@@ -121,6 +121,14 @@
   /* 상세(iframe) */
   .detail-wrap{ background:var(--card) }
   #detailFrame{ width:100%; height:70vh; border:0; display:block }
+
+  /* 토스트 */
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:#111827; color:#fff; padding:10px 14px; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.25);
+    font-size:.95rem; z-index:1000; display:none;
+  }
+  .toast.show{ display:block; }
 </style>
 </head>
 <body>
@@ -203,6 +211,8 @@
           <button type="submit" class="btn">검색</button>
           <button type="button" id="resetBtn" class="btn ghost">초기화</button>
           <button type="button" id="exportBtn" class="btn sec">CSV 내보내기</button>
+          <!-- 추가: 선택 전송 -->
+          <button type="button" id="sendBtn" class="btn">선택 전송</button>
           <span class="right muted" id="hint">데모 데이터 기반 클라이언트 필터링</span>
         </div>
       </form>
@@ -212,20 +222,18 @@
     <section class="result-panel">
       <div class="summary" id="summary">총 0건</div>
 
-      <!-- 탭 헤더 -->
       <div class="tabs" role="tablist" aria-label="목록/상세">
         <button id="tabList" class="tab-btn active" role="tab" aria-controls="panelList" aria-selected="true">목록</button>
         <button id="tabDetail" class="tab-btn" role="tab" aria-controls="panelDetail" aria-selected="false">상세</button>
       </div>
 
-      <!-- 탭 패널 -->
       <div class="tab-panels">
         <!-- 목록 패널 -->
         <div id="panelList" class="tab-panel" role="tabpanel" aria-labelledby="tabList">
-          <!-- 카드 (모바일/아이패드 우선) -->
+          <!-- 카드 (모바일/아이패드) -->
           <div id="cards" class="cards" aria-label="검색 결과 - 카드 목록"></div>
 
-          <!-- 테이블 (데스크톱에서만 노출) -->
+          <!-- 테이블 (데스크톱) -->
           <div class="table-wrap" aria-label="검색 결과 - 테이블">
             <table>
               <thead>
@@ -258,6 +266,9 @@
     </section>
   </div>
 
+  <!-- 토스트 -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
 <script>
 /** ====== 데모 데이터/행정구역 ====== */
 const ADM = {
@@ -275,7 +286,6 @@ const ADM = {
   }
 };
 
-// 데모 주차장 데이터 (type: 노상/노외/부설만 사용)
 const DATA = [
   {nm:"중앙공영주차장", type:"노상", status:"APPROVED", sido:"서울특별시", sigungu:"종로구", emd:"사직동", addr:"사직로 1", manageNo:"PRK-0001"},
   {nm:"연남로 노상", type:"노상", status:"PENDING",  sido:"서울특별시", sigungu:"마포구", emd:"연남동", addr:"연남로 123", manageNo:"PRK-0002"},
@@ -290,6 +300,7 @@ const DATA = [
 ];
 
 const PAGE_SIZE = 6;
+const INTERNAL_API = '/api/internal/parkings/submit'; // TODO: 실제 내부 API 엔드포인트로 교체
 
 /* ====== 엘리먼트 ====== */
 const $ = (s)=>document.querySelector(s);
@@ -310,6 +321,7 @@ const checkAll = $('#checkAll');
 
 const resetBtn = $('#resetBtn');
 const exportBtn = $('#exportBtn');
+const sendBtn = $('#sendBtn');
 
 const tabListBtn = $('#tabList');
 const tabDetailBtn = $('#tabDetail');
@@ -317,9 +329,10 @@ const panelList = $('#panelList');
 const panelDetail = $('#panelDetail');
 const detailFrame = $('#detailFrame');
 
+const toast = $('#toast');
+
 let currentPage = 1;
 let filtered = [...DATA];
-// 선택 상태(관리번호 기준) 유지
 const selected = new Set();
 
 /** ===== 행정구역 셀렉트 구성 ===== */
@@ -414,25 +427,27 @@ function render(){
     `;
   }).join('');
 
-  // 카드(모바일/아이패드)
-  cards.innerHTML = pageRows.map(r=>`
-    <article class="card" data-id="${r.manageNo}" aria-label="${r.nm}">
-      <div class="name">${r.nm}</div>
-      <div class="muted">${r.manageNo}</div>
-      <div><span class="badge">${r.type}</span> · ${badgeStatus(r.status)}</div>
-      <div class="muted">${r.sido} ${r.sigungu} ${r.emd}</div>
-      <div class="addr">${r.addr}</div>
-    </article>
-  `).join('');
+  // 카드(모바일/아이패드) — 체크박스 추가
+  cards.innerHTML = pageRows.map(r=>{
+    const checked = selected.has(r.manageNo) ? 'checked' : '';
+    return `
+      <article class="card" data-id="${r.manageNo}" aria-label="${r.nm}">
+        <div class="card-head">
+          <input type="checkbox" class="card-check" ${checked} aria-label="선택: ${r.nm}" />
+          <div class="muted">${r.manageNo}</div>
+        </div>
+        <div class="name">${r.nm}</div>
+        <div><span class="badge">${r.type}</span> · ${badgeStatus(r.status)}</div>
+        <div class="muted">${r.sido} ${r.sigungu} ${r.emd}</div>
+        <div class="addr">${r.addr}</div>
+      </article>
+    `;
+  }).join('');
 
-  // 페이지네이션
   renderPager(pages);
-
-  // 체크박스 이벤트
-  bindRowChecks();
-
-  // 행/카드 클릭 → 상세 탭 열기
-  bindOpenDetailHandlers(pageRows);
+  bindRowChecks();     // 테이블 체크박스
+  bindCardChecks();    // 카드 체크박스
+  bindOpenDetailHandlers(pageRows); // 행/카드 클릭 → 상세
 }
 
 function renderPager(pages){
@@ -466,6 +481,24 @@ function bindRowChecks(){
       if(e.target.checked) selected.add(id);
       else selected.delete(id);
       syncHeaderCheck();
+      // 카드 뷰의 동일 항목 체크 상태도 동기화
+      const card = cards.querySelector(`.card[data-id="${id}"] .card-check`);
+      if(card) card.checked = e.target.checked;
+    });
+  });
+}
+function bindCardChecks(){
+  document.querySelectorAll('.card-check').forEach(chk=>{
+    chk.addEventListener('click', e=> e.stopPropagation()); // 카드 클릭으로 상세 열림 방지
+    chk.addEventListener('change', (e)=>{
+      const card = e.target.closest('.card');
+      const id = card.dataset.id;
+      if(e.target.checked) selected.add(id);
+      else selected.delete(id);
+      // 테이블 뷰의 동일 항목 체크 상태도 동기화
+      const row = tbody.querySelector(`tr[data-id="${id}"] .row-check`);
+      if(row) row.checked = e.target.checked;
+      syncHeaderCheck();
     });
   });
 }
@@ -473,11 +506,13 @@ function bindRowChecks(){
 function syncHeaderCheck(){
   const visible = Array.from(tbody.querySelectorAll('tr')).map(tr=>tr.dataset.id);
   const allChecked = visible.length>0 && visible.every(id=>selected.has(id));
-  checkAll.checked = allChecked;
-  checkAll.indeterminate = !allChecked && visible.some(id=>selected.has(id));
+  if (checkAll){
+    checkAll.checked = allChecked;
+    checkAll.indeterminate = !allChecked && visible.some(id=>selected.has(id));
+  }
 }
 
-checkAll.addEventListener('change', ()=>{
+checkAll?.addEventListener('change', ()=>{
   const visible = Array.from(tbody.querySelectorAll('tr')).map(tr=>tr.dataset.id);
   if(checkAll.checked){
     visible.forEach(id=>selected.add(id));
@@ -488,10 +523,15 @@ checkAll.addEventListener('change', ()=>{
     const id = chk.closest('tr').dataset.id;
     chk.checked = selected.has(id);
   });
+  // 카드 쪽도 동기화
+  visible.forEach(id=>{
+    const cardChk = cards.querySelector(`.card[data-id="${id}"] .card-check`);
+    if(cardChk) cardChk.checked = selected.has(id);
+  });
   syncHeaderCheck();
 });
 
-/** ===== CSV 내보내기 ===== */
+/** ===== CSV 내보내기 (필터 결과 전체) ===== */
 function exportCSV(){
   const header = ['순번','관리번호','주차장구분','진행상태','시도','시군구','읍면동','상세주소','주차장명'];
   const rows = filtered.map((r, idx)=>[
@@ -514,8 +554,44 @@ function exportCSV(){
   URL.revokeObjectURL(url);
 }
 
+/** ===== 선택 전송(모바일 카드/데스크톱 테이블 공통) ===== */
+async function sendSelected(){
+  if(selected.size === 0){
+    showToast('전송할 항목이 없습니다. (선택 0)');
+    return;
+  }
+  // 선택된 레코드만 payload 구성
+  const items = DATA.filter(r => selected.has(r.manageNo))
+                    .map(r => ({
+                      manageNo: r.manageNo, nm: r.nm, type: r.type, status: r.status,
+                      sido: r.sido, sigungu: r.sigungu, emd: r.emd, addr: r.addr
+                    }));
+
+  try{
+    const res = await fetch(INTERNAL_API, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ items })
+    });
+    if(!res.ok){
+      const txt = await res.text().catch(()=> '');
+      throw new Error(`HTTP ${res.status} ${res.statusText} ${txt||''}`.trim());
+    }
+    showToast(`전송 완료 · ${items.length}건`);
+  }catch(err){
+    console.error(err);
+    showToast('전송 실패: ' + (err?.message || err));
+  }
+}
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(()=> toast.classList.remove('show'), 2200);
+}
+
 /** ===== 탭 전환 ===== */
-function activateTab(which){ // 'list' | 'detail'
+function activateTab(which){
   const listActive = which==='list';
   tabListBtn.classList.toggle('active', listActive);
   tabDetailBtn.classList.toggle('active', !listActive);
@@ -529,7 +605,6 @@ tabDetailBtn.addEventListener('click', ()=> activateTab('detail'));
 
 /** ===== 상세 로딩 ===== */
 function buildDetailUrl(rec){
-  // 주차장형태별 파일 매핑
   const map = { '노상':'offparking.html', '노외':'onparking.html', '부설':'buildparking.html' };
   const file = map[rec.type] || 'offparking.html';
 
@@ -550,19 +625,18 @@ function openDetail(rec){
   activateTab('detail');
 }
 
-/** 목록에서 클릭(행/카드) → 상세 열기 */
+/** 목록에서 클릭(행/카드) → 상세 열기 (체크박스 클릭은 제외) */
 function bindOpenDetailHandlers(pageRows){
-  // 테이블 행: tbody 이벤트 위임
   tbody.onclick = (e)=>{
     const target = e.target;
-    if (target.closest('input,button,label,a')) return; // 체크박스 등 클릭은 통과
+    if (target.closest('input,button,label,a')) return;
     const tr = target.closest('tr'); if(!tr) return;
     const id = tr.dataset.id;
     const rec = pageRows.find(r=>r.manageNo===id);
     if(rec) openDetail(rec);
   };
-  // 카드: 컨테이너 위임
   cards.onclick = (e)=>{
+    if (e.target.closest('input,button,label,a')) return; // 카드 체크박스 제외
     const card = e.target.closest('.card'); if(!card) return;
     const id = card.dataset.id;
     const rec = pageRows.find(r=>r.manageNo===id);
@@ -580,21 +654,20 @@ resetBtn.addEventListener('click', ()=>{
   selected.clear(); syncHeaderCheck();
 });
 exportBtn.addEventListener('click', exportCSV);
+sendBtn.addEventListener('click', sendSelected);
 
 /** ===== 초기화 ===== */
 function init(){
   initAdm();
-  applyFilter(); // 내부에서 render 호출
-  // 초기 탭은 목록
+  applyFilter();
   activateTab('list');
 }
 init();
 
-/** ===== 실제 연동 시 참고 (// TODO) =====
- * - 목록: GET /api/parkings?page=1&size=50&... (서버 페이징)
- * - 상세: type에 따른 파일/라우팅으로 매핑
- * - 선택항목 처리: POST /api/parkings/bulk (body: manageNo 배열)
- * - 코드/행정구역: /api/codes, /api/adm/{sido}/{sigungu}
+/** ===== 실제 연동 시 참고 =====
+ * - 내부 전송 API 예시: POST /api/internal/parkings/submit
+ *   요청: { items: [{manageNo,nm,type,status,sido,sigungu,emd,addr}, ...] }
+ *   응답: 200 OK (JSON) { ok: true, count: n }
  */
 </script>
 </body>
