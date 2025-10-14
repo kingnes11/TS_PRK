@@ -184,185 +184,210 @@ h1{ margin:0; font-size:20px; }
 </main>
 </body>
 
-  <script>
-    // ===== 상수/요소 =====
-    const $ = (s)=>document.querySelector(s);
-    const app = $('#app');
+<script>
+/* ===== DOM 헬퍼 ===== */
+const $ = (s)=>document.querySelector(s);
 
-    const loginId = $('#loginId');
-    const pw = $('#password');
-    const togglePw = $('#togglePw');
-    const remember = $('#remember');
-    const pwVerifyBtn = $('#pwVerifyBtn');
+/* ===== 요소 참조 ===== */
+// 섹션
+const secId    = $('#secId');
+const secPw    = $('#secPw');
+const secPhone = $('#secPhone');
+const secFinal = $('#secFinal');
 
-    const phoneMasked = $('#phoneMasked');
-    const sendOtpBtn = $('#sendOtpBtn');
-    const otpSection = $('#otpSection');
-    const otpBox = $('#otpBox');
-    const otp = $('#otp');
-    const resendBtn = $('#resendBtn');
-    const timerEl = $('#timer');
-    const err = $('#errorBox');
-    const ok = $('#okBox');
-    const finalLoginBtn = $('#finalLoginBtn');
+// 입력/버튼
+const loginId    = $('#loginId');
+const nextIdBtn  = $('#nextIdBtn');
 
-    // 서버가 내려주는 '기입력된 휴대폰 번호' (숫자만). 테스트 기본값: 01012345678
-    const phoneRawFromServer = (app.dataset.phone || '').replace(/\D/g,'') || '01012345678';
+const password   = $('#password');
+const togglePw   = $('#togglePw');
+const nextPwBtn  = $('#nextPwBtn');
 
-    // 테스트 계정
-    const TEST_ID = 'demo';
-    const TEST_PW = 'demo1234';
-    const TEST_OTP = '123456';
+const phone      = $('#phone');
+const sendOtpBtn = $('#sendOtpBtn');
 
-    let pwVerified = false;
-    let otpVerified = false;
-    let lastSendTs = 0;
-    let otpExpireAt = null;
-    let countdown = null;
+const otpBox     = $('#otpBox');
+const otp        = $('#otp');
+const resendBtn  = $('#resendBtn');
+const timerEl    = $('#timer');
 
-    function showError(m){ err.textContent = m || ''; ok.textContent=''; }
-    function showOk(m){ ok.textContent = m || ''; err.textContent=''; }
-    function clearMsg(){ showError(''); showOk(''); }
-    function delay(ms){ return new Promise(r=>setTimeout(r, ms)); }
+const finalLoginBtn = $('#finalLoginBtn');
 
-    function formatPhoneMask(raw){
-      const d = raw.replace(/\D/g,'');
-      if(d.length < 10) return d; // 최소 10자리 가정
-      // 010-****-끝4자리
-      const head = d.slice(0,3);
-      const tail = d.slice(-4);
-      return `${head}-****-${tail}`;
-    }
+// 메시지 박스
+const idErr    = $('#idErr');
+const pwErr    = $('#pwErr');
+const otpErr   = $('#otpErr');
+const otpOk    = $('#otpOk');
+const finalErr = $('#finalErr');
 
-    // 초기 마스킹 표시
-    phoneMasked.value = formatPhoneMask(phoneRawFromServer);
+/* ===== 데모 상수 ===== */
+const DEMO_ID  = 'admin';
+const DEMO_PW  = 'admin';
+const DEMO_OTP = '123456';
 
-    // 비번 표시 토글
-    togglePw.addEventListener('click', ()=>{
-      const isPw = pw.type === 'password';
-      pw.type = isPw ? 'text' : 'password';
-      togglePw.textContent = isPw ? '숨김' : '표시';
-      pw.focus();
-    });
+/* ===== 상태 ===== */
+let idPassed = false;
+let pwPassed = false;
+let otpPassed = false;
 
-    // 1차 인증
-    pwVerifyBtn.addEventListener('click', async ()=>{
-      clearMsg();
-      if(!loginId.value || !loginId.checkValidity()){
-        return showError('아이디를 확인해주세요. (영문/숫자/.-_ 4~32자)');
-      }
-      if(!pw.value || pw.value.length < 8){
-        return showError('비밀번호는 최소 8자 이상이어야 합니다.');
-      }
+let lastSendTs = 0;
+let otpExpireAt = null;
+let countdown = null;
 
-      pwVerifyBtn.disabled = true; pwVerifyBtn.textContent = '확인 중…';
-      await delay(300);
+/* ===== 유틸 ===== */
+const delay = (ms)=>new Promise(r=>setTimeout(r, ms));
+const show   = (el)=>el && el.classList.remove('hide');
+const hide   = (el)=>el && el.classList.add('hide');
+const setErr = (el, msg)=>{ if(!el) return; el.textContent = msg||''; if(msg) show(el); else hide(el); };
 
-      if(loginId.value === TEST_ID && pw.value === TEST_PW){
-        pwVerified = true;
-      } else {
-        // TODO: 실제 서버 1차 인증
-        // const r = await fetch('/api/auth/login', {...})
-        // if(!r.ok) { showError('아이디 또는 비밀번호가 올바르지 않습니다.'); ...; return; }
-        showError('아이디 또는 비밀번호가 올바르지 않습니다. (테스트: demo/demo1234)');
-        pwVerifyBtn.disabled = false; pwVerifyBtn.textContent = '1차 확인';
-        return;
-      }
+/* ===== 1) 아이디 단계 ===== */
+nextIdBtn.addEventListener('click', async ()=>{
+  setErr(idErr, '');
+  // 기본 형식 검증
+  if (!loginId.value || !loginId.checkValidity()){
+    return setErr(idErr, '아이디를 확인하세요. (영문/숫자/.-_ 4~32자)');
+  }
 
-      showOk('1차 인증 성공. 등록된 번호로 2차 인증을 진행하세요.');
-      otpSection.classList.remove('hide');
-      pwVerifyBtn.disabled = false; pwVerifyBtn.textContent = '1차 확인';
-      // 포커스 이동
-      sendOtpBtn.focus();
-    });
+  // 데모: admin만 통과
+  if (loginId.value !== DEMO_ID){
+    return setErr(idErr, '존재하지 않는 아이디입니다. (데모: admin)');
+  }
 
-    // 타이머
-    function startTimer(sec){
-      otpExpireAt = Date.now() + sec*1000;
-      updateTimer();
-      if(countdown) clearInterval(countdown);
-      countdown = setInterval(updateTimer, 250);
-    }
-    function updateTimer(){
-      const remain = Math.max(0, Math.floor((otpExpireAt - Date.now())/1000));
-      const mm = String(Math.floor(remain/60)).padStart(2,'0');
-      const ss = String(remain%60).padStart(2,'0');
-      timerEl.textContent = `${mm}:${ss}`;
-      if(remain===0){
-        clearInterval(countdown);
-        resendBtn.disabled = false;
-        showError('인증코드 유효시간이 만료되었습니다. 재전송해주세요.');
-        otpVerified = false;
-        finalLoginBtn.disabled = true;
-      }
-    }
+  // 통과 → 다음 단계 표시
+  idPassed = true;
+  hide(idErr);
+  show(secPw);
+  await delay(10);
+  password.focus();
+});
 
-    // 인증코드 전송 (등록 번호로만)
-    sendOtpBtn.addEventListener('click', async ()=>{
-      clearMsg();
-      if(!pwVerified){ return showError('먼저 1차(아이디/비밀번호) 인증을 완료해주세요.'); }
+/* ===== 2) 비밀번호 단계 ===== */
+togglePw.addEventListener('click', ()=>{
+  const isPw = password.type === 'password';
+  password.type = isPw ? 'text' : 'password';
+  togglePw.textContent = isPw ? '숨김' : '표시';
+  password.focus();
+});
 
-      const now = Date.now();
-      if(now - lastSendTs < 30000){
-        const left = Math.ceil((30000 - (now-lastSendTs))/1000);
-        return showError(`잠시 후 다시 시도하세요. (${left}s)`);
-      }
+nextPwBtn.addEventListener('click', async ()=>{
+  setErr(pwErr, '');
+  if (!idPassed){
+    show(secId);
+    return setErr(pwErr, '먼저 아이디를 입력하세요.');
+  }
+  if (!password.value || password.value.length < 8){
+    return setErr(pwErr, '비밀번호는 최소 8자 이상이어야 합니다.');
+  }
+  // 데모: admin/admin 일치해야 통과
+  if (loginId.value !== DEMO_ID || password.value !== DEMO_PW){
+    return setErr(pwErr, '아이디 또는 비밀번호가 올바르지 않습니다. (데모: admin/admin)');
+  }
 
-      // TODO: 실제 환경: 서버가 계정에 등록된 번호로 발송
-      // await fetch('/api/2fa/sms/send', { method:'POST', headers:{'Content-Type':'application/json'},
-      //   body: JSON.stringify({ loginId: loginId.value /* phone은 서버에서 조회 */ }) });
+  pwPassed = true;
+  hide(pwErr);
+  show(secPhone);
+  await delay(10);
+  phone.focus();
+});
 
-      await delay(300); // demo
-      lastSendTs = now;
-      otpBox.classList.remove('hide');
-      resendBtn.disabled = true;
-      startTimer(120); // 2분
-      otp.value = '';
-      otp.focus();
-      showOk(`인증코드를 ${phoneMasked.value} 로 전송했습니다. (테스트: 123456)`);
-    });
-
-    resendBtn.addEventListener('click', ()=> sendOtpBtn.click());
-
-    // 코드 검증
-    otp.addEventListener('input', async ()=>{
-      clearMsg();
-      otp.value = otp.value.replace(/\D/g,'').slice(0,6);
-      if(otp.value.length === 6){
-        await delay(200);
-
-        if(otp.value === TEST_OTP){
-          otpVerified = true;
-        } else {
-          // TODO: 실제 서버 검증
-          // const r = await fetch('/api/2fa/sms/verify', { ... loginId, code ... })
-          showError('인증코드가 올바르지 않습니다. (테스트: 123456)');
-          otpVerified = false; finalLoginBtn.disabled = true; return;
-        }
-
-        showOk('2차 인증 완료. 최종 로그인을 진행하세요.');
-        if(countdown) clearInterval(countdown);
-        finalLoginBtn.disabled = !(pwVerified && otpVerified);
-      } else {
-        otpVerified = false;
-        finalLoginBtn.disabled = true;
-      }
-    });
-
-    // 최종 로그인
-  finalLoginBtn.addEventListener('click', async ()=>{
-    clearMsg();
-    if (!(pwVerified && otpVerified)) {
-      return showError('1차/2차 인증이 완료되지 않았습니다.');
-    }
-
+/* ===== 3) 휴대폰/OTP 단계 ===== */
+function startTimer(sec){
+  otpExpireAt = Date.now() + sec*1000;
+  updateTimer();
+  if (countdown) clearInterval(countdown);
+  countdown = setInterval(updateTimer, 250);
+}
+function updateTimer(){
+  const remain = Math.max(0, Math.floor((otpExpireAt - Date.now())/1000));
+  const mm = String(Math.floor(remain/60)).padStart(2,'0');
+  const ss = String(remain%60).padStart(2,'0');
+  timerEl.textContent = `${mm}:${ss}`;
+  if (remain === 0){
+    clearInterval(countdown);
+    resendBtn.disabled = false;
+    setErr(otpErr, '인증코드 유효시간이 만료되었습니다. 재전송해주세요.');
+    hide(otpOk);
+    otpPassed = false;
     finalLoginBtn.disabled = true;
-    finalLoginBtn.textContent = '로그인 중…';
-    await delay(400);
+  }
+}
 
-    // index.html로 이동
-    location.href = 'index.html';
-  });
-  </script>
+sendOtpBtn.addEventListener('click', async ()=>{
+  setErr(otpErr, ''); hide(otpOk);
+  if (!pwPassed){
+    show(secPw);
+    return setErr(otpErr, '먼저 비밀번호 단계를 완료하세요.');
+  }
+
+  // 휴대폰 형식(숫자만 10~11자리 정도)
+  const digits = (phone.value||'').replace(/\D/g,'');
+  if (digits.length < 10 || digits.length > 11){
+    return setErr(otpErr, '휴대폰 번호를 정확히 입력하세요. (숫자 10~11자리)');
+  }
+
+  // 30초 제한 (데모)
+  const now = Date.now();
+  if (now - lastSendTs < 30000){
+    const left = Math.ceil((30000 - (now - lastSendTs))/1000);
+    return setErr(otpErr, `잠시 후 다시 시도하세요. (${left}s)`);
+  }
+
+  // 전송 시뮬레이션
+  sendOtpBtn.disabled = true;
+  sendOtpBtn.textContent = '전송 중…';
+  await delay(300);
+  lastSendTs = now;
+
+  show(otpBox);
+  resendBtn.disabled = true;
+  startTimer(120);
+  otp.value = '';
+  otp.focus();
+  setErr(otpErr, ''); show(otpOk); otpOk.textContent = '인증코드를 전송했습니다. (데모: 123456)';
+  sendOtpBtn.disabled = false;
+  sendOtpBtn.textContent = '인증코드 전송';
+});
+
+resendBtn.addEventListener('click', ()=> sendOtpBtn.click());
+
+otp.addEventListener('input', async ()=>{
+  setErr(otpErr, ''); hide(otpOk);
+  otp.value = otp.value.replace(/\D/g,'').slice(0,6);
+
+  if (otp.value.length === 6){
+    await delay(150);
+    if (otp.value === DEMO_OTP){
+      otpPassed = true;
+      hide(otpErr);
+      otpOk.textContent = '인증코드 확인 완료.';
+      show(otpOk);
+      if (countdown) clearInterval(countdown);
+      finalLoginBtn.disabled = false;
+      show(secFinal);
+    } else {
+      otpPassed = false;
+      finalLoginBtn.disabled = true;
+      setErr(otpErr, '인증코드가 올바르지 않습니다. (데모: 123456)');
+    }
+  } else {
+    otpPassed = false;
+    finalLoginBtn.disabled = true;
+  }
+});
+
+/* ===== 4) 최종 로그인 ===== */
+finalLoginBtn.addEventListener('click', async ()=>{
+  setErr(finalErr, '');
+  if (!(idPassed && pwPassed && otpPassed)){
+    return setErr(finalErr, '아이디/비밀번호/OTP 단계를 모두 완료하세요.');
+  }
+  finalLoginBtn.disabled = true;
+  finalLoginBtn.textContent = '로그인 중…';
+  await delay(400);
+
+  // 데모: index.html로 이동
+  location.href = 'index.html';
+});
+</script>
 </body>
 </html>
