@@ -1,137 +1,188 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>2단계 인증 로그인 (아이디/비번 + SMS)</title>
-  <style>
-    :root{
-      --bg:#f6f7fb; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
-      --primary:#2563eb; --primary-strong:#1d4ed8; --ring:rgba(37,99,235,.35);
-      --error:#dc2626; --border:#e5e7eb; --success:#16a34a;
-    }
-    @media (prefers-color-scheme: dark){
-      :root{ --bg:#0b1220; --card:#0f172a; --text:#e5e7eb; --muted:#94a3b8;
-        --primary:#3b82f6; --primary-strong:#2563eb; --ring:rgba(59,130,246,.35);
-        --error:#f87171; --border:#1f2a44; --success:#22c55e; }
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{
-      margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans KR",sans-serif;
-      background:
-        radial-gradient(60vmax 60vmax at 10% 10%, rgba(99,102,241,.08), transparent 60%),
-        radial-gradient(50vmax 50vmax at 90% 20%, rgba(59,130,246,.08), transparent 60%),
-        var(--bg);
-      color:var(--text); display:grid; place-items:center; padding:24px;
-    }
-    .card{
-      width:100%; max-width:480px; background:var(--card); border:1px solid var(--border);
-      border-radius:16px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,.06);
-      animation:floatIn .35s ease-out;
-    }
-    @keyframes floatIn{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
-    .header{display:flex; align-items:center; gap:12px; margin-bottom:18px}
-    .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-strong));display:grid;place-items:center;color:#fff;font-weight:700}
-    h1{font-size:1.25rem; margin:0}
-    .sub{color:var(--muted); font-size:.9rem; margin:4px 0 0}
-    .banner{background:rgba(37,99,235,.08); border:1px dashed var(--primary); border-radius:12px; padding:10px 12px; font-size:.9rem; margin-bottom:12px}
-    .banner code{font-family: ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    <title>로그인</title>
+    <style>
+      /* Light theme palette for white backgrounds */
+:root{
+    /* 기본 배경과 카드 배경을 모두 흰색으로 설정 */
+    --bg: #ffffff;
+    --card: #ffffff;
+    /* 어두운 회색 계열 텍스트로 가독성 확보 */
+    --text: #374151;
+    --muted: #6b7280;
+    /* 주 색상 계열을 밝은 파랑으로 조정 */
+    --primary: #3b82f6;
+    --primary-2: #2563eb;
+    --ring: rgba(96, 165, 250, .35);
+    /* 테두리 색상을 연한 회색으로 조정 */
+    --border: #d1d5db;
+    --ok: #22c55e;
+    --err: #dc2626;
+    /* 입력 필드 색상을 밝은 테마에 맞게 조정 */
+    --input: #374151;
+    --input-bg: #ffffff;
+    --input-border: #d1d5db;
+}
 
-    form{display:grid; gap:14px}
-    .field{display:grid; gap:8px}
-    label{font-size:.9rem}
-    .control{display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:12px; padding:12px 14px}
-    .control:focus-within{outline:3px solid var(--ring); outline-offset:1px}
-    .input{width:100%; border:0; outline:0; background:transparent; color:var(--text); font-size:1rem;}
-    .row{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap}
-    .hint{color:var(--muted); font-size:.85rem}
-    .error{color:var(--error); font-size:.9rem; min-height:1.2em}
-    .ok{color:var(--success); font-size:.9rem; min-height:1.2em}
-    .btn{appearance:none; border:0; cursor:pointer; border-radius:12px; padding:12px 16px; width:100%; background:linear-gradient(180deg,var(--primary),var(--primary-strong)); color:#fff; font-weight:600; font-size:1rem}
-    .btn:active{transform:translateY(1px) scale(.995)}
-    .btn[disabled]{opacity:.6; cursor:not-allowed;}
-    .link{color:var(--primary); text-decoration:none; font-size:.9rem}
-    .hide{display:none !important}
-    .otp-grid{display:grid; grid-template-columns:1fr auto; gap:10px}
-    .foot{color:var(--muted); font-size:.85rem; text-align:center}
-    .mono{font-variant-numeric: tabular-nums}
-  </style>
+html, body { height:100%; }
+body{
+    margin:0; background:var(--bg); color:var(--text);
+    font:14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Noto Sans KR, Apple SD Gothic Neo, sans-serif;
+}
+.main.container{ max-width:640px; margin:24px auto; padding:16px; }
+.card{
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:24px 20px; box-shadow:0 6px 18px rgba(0,0,0,.06);
+}
+.header{ display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.logo{
+    width:40px; height:40px; border-radius:10px; display:grid; place-items:center;
+    background:var(--primary); color:#fff; font-weight:700; box-shadow:0 4px 12px rgba(37,99,235,.35);
+}
+h1{ margin:0; font-size:20px; }
+.sub{ margin:2px 0 0; color:var(--muted); font-size:12px; }
+.banner{
+    margin:12px 0 16px; padding:10px 12px; border:1px dashed var(--border);
+    border-radius:12px; background:rgba(37,99,235,.06); color:#1f2937;
+}
+
+.step{ margin:18px 0 8px; }
+.step + .step{ margin-top:14px; }
+.hide{ display:none !important; }
+
+.field{ display:block; margin-bottom:12px; }
+.field label{ display:block; font-weight:600; margin-bottom:8px; }
+.control{ display:flex; gap:8px; align-items:center; }
+.control.inline-actions{ align-items:stretch; }
+.input{
+    flex:1; padding:10px 12px; border:1px solid var(--input-border);
+    border-radius:10px; background:var(--input-bg); color:var(--input);
+    outline:none; font-size:14px; transition: box-shadow .15s, border-color .15s;
+}
+.input:focus{ border-color:var(--primary); box-shadow:0 0 0 4px var(--ring); }
+.input.mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.hint{ color:var(--muted); font-size:12px; }
+
+.btn{
+    appearance:none; border:1px solid var(--primary-2); background:var(--primary);
+    color:#fff; padding:10px 16px; border-radius:10px; font-weight:700; cursor:pointer;
+    transition: transform .02s ease, background .15s, box-shadow .15s;
+    white-space:nowrap;
+}
+.btn:hover{ background:var(--primary-2); }
+.btn:active{ transform: translateY(1px); }
+.btn[disabled]{ opacity:.55; cursor:not-allowed; }
+.btn.secondary{
+    background:transparent; color:var(--primary-2); border-color:var(--primary-2);
+}
+.link{
+    appearance:none; background:transparent; border:none; padding:0; color:var(--primary-2);
+    font-weight:600; cursor:pointer; text-decoration:underline;
+}
+
+.otp-grid{ display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; }
+
+.ok, .error{ margin:8px 0; padding:10px 12px; border-radius:10px; font-weight:600; }
+.ok{ color:#065f46; background:#ecfdf5; border:1px solid #a7f3d0; }
+.error{ color:#991b1b; background:#fef2f2; border:1px solid #fecaca; }
+
+.sr-only{
+    position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+
+@media (max-width:420px){
+    .otp-grid{ grid-template-columns:1fr; }
+    .btn, .link{ width:100%; text-align:center; }
+}
+    </style>
 </head>
 <body>
-  <!-- 실제 배포 시, 서버가 data-phone="01012345678" 같이 '숫자만' 값을 채워 넣어주세요 -->
-  <main id="app" class="card" role="main" aria-labelledby="title" data-phone="01012345678">
-    <div class="header">
-      <div class="logo" aria-hidden="true">TS</div>
-      <div>
-        <h1 id="title">로그인</h1>
-        <p class="sub">1차: 아이디/비밀번호 → 2차: SMS</p>
-      </div>
-    </div>
-
-    <div class="banner">
-      <strong>테스트:</strong> <code>아이디 demo</code>, <code>비번 demo1234</code> → 코드 전송 후 <code>OTP 123456</code>
-    </div>
-
-    <form id="loginForm" novalidate>
-      <!-- 1차: 아이디/비밀번호 -->
-      <div class="field">
-        <label for="loginId">아이디</label>
-        <div class="control">
-          <input id="loginId" class="input" type="text" autocomplete="username"
-                 placeholder="아이디를 입력하세요" minlength="4" maxlength="32"
-                 pattern="[A-Za-z0-9._-]{4,32}" required />
-        </div>
-        <span class="hint">영문/숫자/.-_ 4~32자</span>
-      </div>
-      <div class="field">
-        <label for="password">비밀번호</label>
-        <div class="control">
-          <input id="password" class="input" type="password" autocomplete="current-password"
-                 minlength="8" placeholder="••••••••" required />
-          <button class="link" type="button" id="togglePw" aria-label="비밀번호 표시 전환">표시</button>
-        </div>
-      </div>
-      <div class="row">
-        <label class="hint"><input type="checkbox" id="remember" /> 자동 로그인</label>
-        <a class="link" href="#" onclick="alert('비밀번호 초기화 안내 화면으로 이동');return false;">비밀번호 찾기</a>
-      </div>
-
-      <div id="errorBox" class="error" aria-live="polite"></div>
-      <div id="okBox" class="ok" aria-live="polite"></div>
-
-      <button id="pwVerifyBtn" class="btn" type="button">로그인</button>
-
-      <!-- 2차: SMS 인증 (전화번호는 표시만, 입력 불가) -->
-      <section id="otpSection" class="hide" aria-label="2차 인증(SMS)">
-        <hr style="border:none; border-top:1px solid var(--border); margin:8px 0 12px" />
-        <div class="field">
-          <label>인증 대상 휴대폰</label>
-          <div class="control" aria-describedby="phoneHint">
-            <input id="phoneMasked" class="input mono" type="text" value="" readonly />
-          </div>
-          <div class="row">
-            <span id="phoneHint" class="hint">계정에 등록된 번호로만 발송됩니다.</span>
-            <button id="sendOtpBtn" class="link" type="button">인증코드 전송</button>
-          </div>
-        </div>
-
-        <div id="otpBox" class="field hide" aria-live="polite">
-          <label for="otp">인증코드 (6자리)</label>
-          <div class="otp-grid">
-            <div class="control">
-              <input id="otp" class="input mono" type="text" inputmode="numeric" pattern="\\d{6}" maxlength="6"
-                     placeholder="______" aria-describedby="otpHint"/>
+<main class="main container" role="main" aria-labelledby="title">
+    <div class="card">
+        <div class="header">
+            <div class="logo" aria-hidden="true">TS</div>
+            <div>
+                <h1 id="title">로그인</h1>
+                <p class="sub">아이디 → 비밀번호 → (SMS)인증 → 로그인</p>
             </div>
-            <button id="resendBtn" class="link" type="button" disabled>재전송(60)</button>
-          </div>
-          <span id="otpHint" class="hint">유효시간 <span id="timer" class="mono">02:00</span></span>
         </div>
+        <form id="loginForm" method="POST" action="<c:url value='/login'/>">
+            <!-- 1) 아이디 (오른쪽에 다음 버튼) -->
+            <section id="secId" class="step" aria-labelledby="step1-title">
+                <h2 id="step1-title" class="sr-only">아이디 입력</h2>
+                <div class="field">
+                    <label for="loginId">아이디</label>
+                    <div class="control inline-actions">
+                        <input id="loginId" name="userId" class="input" type="text" autocomplete="username"
+                               placeholder="아이디를 입력하세요" minlength="4" maxlength="32"
+                               pattern="[A-Za-z0-9._\-]{4,32}" required />
+                        <button id="nextIdBtn" class="btn" type="button">다음</button>
+                    </div>
+                    <span class="hint">영문/숫자/.-_ 4~32자</span>
+                </div>
+                <div id="idErr" class="error hide" aria-live="polite"></div>
+            </section>
 
-        <button id="finalLoginBtn" class="btn" type="button" disabled>인증완료</button>
-      </section>
-    </form>
-  </main>
+            <!-- 2) 비밀번호 (아이디 아래에 펼침, 여기서는 검증하지 않음) -->
+            <section id="secPw" class="step hide" aria-labelledby="step2-title">
+                <h2 id="step2-title" class="sr-only">비밀번호 입력</h2>
+                <div class="field">
+                    <label for="password">비밀번호</label>
+                    <div class="control inline-actions">
+                        <input id="password" name="password" class="input" type="password" autocomplete="current-password"
+                               minlength="8" placeholder="••••••••" required />
+                        <button class="link" type="button" id="togglePw" aria-label="비밀번호 표시 전환">표시</button>
+                        <button id="nextPwBtn" class="btn" type="button">다음</button>
+                    </div>
+                    <span class="hint">최소 8자 이상</span>
+                </div>
+                <div id="pwErr" class="error hide" aria-live="polite"></div>
+            </section>
+
+            <!-- 3) 휴대폰 & OTP (비밀번호 아래에 펼침, OTP는 반드시 검증) -->
+            <section id="secPhone" class="step hide" aria-labelledby="step3-title">
+                <h2 id="step3-title" class="sr-only">휴대폰 번호 입력</h2>
+
+                <div class="field">
+                    <label for="phone">인증 받을 휴대폰 번호</label>
+                    <div class="control inline-actions">
+                        <input id="phone" class="input mono" type="text" inputmode="numeric" maxlength="11"
+                               placeholder="숫자만 입력 (예: 01012345678)" required />
+                        <button id="sendOtpBtn" class="btn" type="button">인증코드 전송</button>
+                    </div>
+                    <span class="hint">숫자만 입력하세요. (하이픈은 서버 표시용 처리 권장)</span>
+                </div>
+
+                <div id="otpBox" class="field hide" aria-live="polite">
+                    <label for="otp">인증코드 (6자리)</label>
+                    <div class="otp-grid">
+                        <div class="control">
+                            <input id="otp" class="input mono" type="text" inputmode="numeric"
+                                   pattern="\\d{6}" maxlength="6" placeholder="______" aria-describedby="otpHint"/>
+                        </div>
+                        <button id="resendBtn" class="link" type="button" disabled>재전송(60)</button>
+                    </div>
+                    <span id="otpHint" class="hint">유효시간 <span id="timer" class="mono">02:00</span></span>
+                </div>
+
+                <div id="otpErr" class="error hide" aria-live="polite"></div>
+                <div id="otpOk" class="ok hide" aria-live="polite">인증코드 확인 완료.</div>
+            </section>
+
+            <!-- 4) 최종 로그인 (OTP 성공해야 활성화) -->
+            <section id="secFinal" class="step hide" aria-labelledby="step4-title">
+                <h2 id="step4-title" class="sr-only">최종 로그인</h2>
+                <div id="finalErr" class="error hide" aria-live="polite"></div>
+                <div class="row" style="justify-content:flex-end; margin-top:12px;">
+                    <button id="finalLoginBtn" class="btn" type="button" disabled>로그인</button>
+                </div>
+            </section>
+        </form>
+    </div>
+</main>
+</body>
 
   <script>
     // ===== 상수/요소 =====
