@@ -299,20 +299,19 @@
     });
 
     // 최종 로그인
-    finalLoginBtn.addEventListener('click', async ()=>{
-      clearMsg();
-      if(!(pwVerified && otpVerified)){ return showError('1차/2차 인증이 완료되지 않았습니다.'); }
+  finalLoginBtn.addEventListener('click', async ()=>{
+    clearMsg();
+    if (!(pwVerified && otpVerified)) {
+      return showError('1차/2차 인증이 완료되지 않았습니다.');
+    }
 
-      finalLoginBtn.disabled = true; finalLoginBtn.textContent = '로그인 중…';
-      await delay(400);
+    finalLoginBtn.disabled = true;
+    finalLoginBtn.textContent = '로그인 중…';
+    await delay(400);
 
-      alert('로그인 성공! (테스트 모드)\n아이디: ' + loginId.value + '\n발송번호: ' + phoneMasked.value);
-      finalLoginBtn.disabled = false; finalLoginBtn.textContent = '최종 로그인';
-
-      // TODO: 실제 환경: /api/2fa/complete 호출 후 리다이렉트
-      // const resp = await fetch('/api/2fa/complete', {...})
-      // location.href = (await resp.json()).redirect || '/';
-    });
+    // index.html로 이동
+    location.href = 'index.html';
+  });
   </script>
 </body>
 </html>
