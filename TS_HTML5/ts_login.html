@@ -132,7 +132,7 @@ h1{ margin:0; font-size:20px; }
                     <label for="password">비밀번호</label>
                     <div class="control inline-actions">
                         <input id="password" name="password" class="input" type="password" autocomplete="current-password"
-                               minlength="8" placeholder="••••••••" required />
+                                placeholder="••••••••" required />
                         <button class="link" type="button" id="togglePw" aria-label="비밀번호 표시 전환">표시</button>
                         <button id="nextPwBtn" class="btn" type="button">다음</button>
                     </div>
@@ -275,9 +275,9 @@ nextPwBtn.addEventListener('click', async ()=>{
     show(secId);
     return setErr(pwErr, '먼저 아이디를 입력하세요.');
   }
-  if (!password.value || password.value.length < 8){
-    return setErr(pwErr, '비밀번호는 최소 8자 이상이어야 합니다.');
-  }
+if (!password.value){
+  return setErr(pwErr, '비밀번호를 입력하세요.');
+}
   // 데모: admin/admin 일치해야 통과
   if (loginId.value !== DEMO_ID || password.value !== DEMO_PW){
     return setErr(pwErr, '아이디 또는 비밀번호가 올바르지 않습니다. (데모: admin/admin)');
